@@ -1,0 +1,64 @@
+name: build-windows
+
+# The maintainer agent cannot see the user's machine, so CI is its
+# eyes: every push builds the exe on a real Windows runner, launches
+# it, captures QA screenshots to the `ci-qa` branch, and (on version
+# tags) publishes a GitHub Release with the exe attached.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: pip install pywebview pyinstaller pillow pystray
+
+      - name: Build single-file exe
+        run: >
+          python -m PyInstaller --noconfirm --clean --windowed --onefile
+          --name LazyScholar --icon lazyscholar.ico
+          --collect-all webview --collect-all pystray
+          --add-data "vendor;vendor" --add-data "lazyscholar.ico;."
+          lazyscholar.py
+
+      - name: Smoke test + QA screenshots
+        id: smoke
+        continue-on-error: true
+        run: python scripts/ci_smoke.py
+
+      - name: Upload exe + QA artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: LazyScholar-windows
+          path: |
+            dist/LazyScholar.exe
+            qa/
+
+      - name: Publish QA screenshots to ci-qa branch
+        if: always()
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: ci-qa
+          folder: qa
+          clean: true
+
+      - name: Release (version tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/LazyScholar.exe
+          generate_release_notes: true
