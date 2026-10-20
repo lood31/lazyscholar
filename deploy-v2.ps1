@@ -22,12 +22,12 @@ cmd /c 'D:\lazyscholar\build-app.cmd'
 $tail = (Get-Content 'D:\lazyscholar\build.log' -Tail 3) -join ' | '
 Note "build log tail: $tail"
 
-# 4. Zip the release
-Compress-Archive -Path 'D:\lazyscholar\dist\LazyScholar' -DestinationPath 'D:\lazyscholar\LazyScholar-Windows.zip' -Force
+# 4. Zip the release (single-file exe inside)
+Compress-Archive -Path 'D:\lazyscholar\dist\LazyScholar.exe' -DestinationPath 'D:\lazyscholar\LazyScholar-Windows.zip' -Force
 Note "zip bytes: $((Get-Item 'D:\lazyscholar\LazyScholar-Windows.zip').Length)"
 
 # 5. Launch the new app and smoke-test it locally
-Start-Process 'D:\lazyscholar\dist\LazyScholar\LazyScholar.exe' -ArgumentList '--app','--vault','D:\LazyScholarVault'
+Start-Process 'D:\lazyscholar\dist\LazyScholar.exe' -ArgumentList '--app','--vault','D:\LazyScholarVault'
 Start-Sleep 12
 foreach ($u in @('http://127.0.0.1:8765/api/state','http://127.0.0.1:8765/app')) {
   try { $r = Invoke-WebRequest $u -UseBasicParsing -TimeoutSec 6; Note "$u -> $($r.StatusCode)" }

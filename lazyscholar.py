@@ -807,14 +807,16 @@ APP_PAGE = r"""<!doctype html>
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
 body{font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text)}
-#app{display:grid;grid-template-columns:62px 1fr;height:100vh}
-#rail{background:var(--ink);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:8px}
+#app{display:grid;grid-template-columns:1fr 62px;height:100vh;box-shadow:-14px 0 34px rgba(16,19,24,.28)}
+#rail{grid-column:2;grid-row:1;background:var(--ink);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:8px}
+#content{grid-column:1;grid-row:1}
 #rail .logo{font-size:26px;background:var(--card);border-radius:14px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;margin-bottom:10px}
 #rail button{width:48px;padding:7px 0 5px;border:none;border-radius:12px;background:transparent;color:#CFC9BC;font-size:17px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px}
 #rail button span{font-size:10px}
 #rail button:hover{background:#1E2126}
-#rail button.on{background:#26221B;color:var(--copper2);box-shadow:inset 2px 0 0 var(--copper)}
-.railfoot{margin-top:auto}
+#rail button.on{background:#26221B;color:var(--copper2);box-shadow:inset -2px 0 0 var(--copper)}
+.railfoot{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:8px}
+#rail .mini{width:38px;padding:5px 0;font-size:14px}
 #dot{width:10px;height:10px;border-radius:50%;background:#B3402A;display:block}
 #dot.ok{background:#7A9A52}
 #content{overflow-y:auto;padding:24px 26px 50px}
@@ -868,12 +870,16 @@ input[type=time]{background:var(--soft);border:1px solid var(--line);border-radi
 <body>
 <div id="app">
   <nav id="rail">
-    <div class="logo">🦥</div>
+    <div class="logo pywebview-drag-region" title="拖动我可以移动面板">🦥</div>
     <button data-tab="queue" class="on">📥<span>队列</span></button>
     <button data-tab="notes">📝<span>笔记</span></button>
     <button data-tab="model">🦙<span>模型</span></button>
     <button data-tab="settings">⚙️<span>设置</span></button>
-    <div class="railfoot"><span id="dot" title="模型状态"></span></div>
+    <div class="railfoot">
+      <button class="mini" id="win-hide" title="收起面板">—</button>
+      <button class="mini" id="win-quit" title="退出 LazyScholar">⏻</button>
+      <span id="dot" title="模型状态"></span>
+    </div>
   </nav>
   <main id="content">
     <section id="tab-queue" class="panel on">
@@ -934,12 +940,14 @@ function esc(s){return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 async function jget(u){ const r = await fetch(u); return r.json(); }
 async function jpost(u, body){ const r = await fetch(u, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})}); return r.json(); }
 
-document.querySelectorAll('#rail button').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('#rail button').forEach(x => x.classList.toggle('on', x === b));
+document.querySelectorAll('#rail button[data-tab]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#rail button[data-tab]').forEach(x => x.classList.toggle('on', x === b));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('on', p.id === 'tab-' + b.dataset.tab));
   if(b.dataset.tab === 'notes') loadNotes();
   if(b.dataset.tab === 'queue') loadQueue();
 }));
+$('win-hide').addEventListener('click', () => { if(window.pywebview && window.pywebview.api) window.pywebview.api.hide_main(); });
+$('win-quit').addEventListener('click', () => { if(window.pywebview && window.pywebview.api) window.pywebview.api.quit_app(); });
 
 function applyPrefs(){
   document.documentElement.dataset.theme = CFG.theme || 'light';
@@ -1279,11 +1287,13 @@ def _serve_ui_safe(vault: Path, open_browser: bool) -> None:
 
 
 def run_app(vault: Path, interval: int) -> int:
-    """Packaged-app mode (v2): butler + scheduler + web UI in threads;
-    in front, a small floating ball window docked to the right edge of
-    the screen (the Grammarly pose) that opens the main four-tab window.
-    Closing the main window hides it; right-clicking the ball quits.
-    Falls back to headless if pywebview is missing."""
+    """Packaged-app mode (v3): butler + scheduler + web UI in threads;
+    in front, a small floating ball docked to the right edge of the
+    screen; clicking it opens the main UI as a frameless side panel
+    docked to the right edge (the Grammarly pose: icon rail on the
+    panel's right side, ball staying visible at the extreme edge).
+    The panel's rail carries collapse/quit buttons; right-clicking
+    the ball quits. Falls back to headless if pywebview is missing."""
     _ensure_vault(vault)
     log(vault, f"START app mode vault={vault}")
     cfg = load_config(vault)
@@ -1328,6 +1338,12 @@ def run_app(vault: Path, interval: int) -> int:
                 win.show()
                 state["main_visible"] = True
 
+        def hide_main(self):
+            win = state["main"]
+            if win is not None and state["main_visible"]:
+                win.hide()
+                state["main_visible"] = False
+
         def quit_app(self):
             for key in ("main", "ball"):
                 win = state.get(key)
@@ -1350,11 +1366,13 @@ def run_app(vault: Path, interval: int) -> int:
             return None
 
     api = AppApi()
+    panel_w = 470
+    panel_h = max(620, min(screen_h - 28, 920))
     main = webview.create_window(
         "LazyScholar · 懒人学者", f"http://127.0.0.1:{UI_PORT}/app",
-        js_api=api, width=980, height=720,
-        x=max(0, (screen_w - 980) // 2), y=max(0, (screen_h - 720) // 2),
-        hidden=True)
+        js_api=api, width=panel_w, height=panel_h,
+        x=max(0, screen_w - panel_w - 84), y=max(0, (screen_h - panel_h) // 2),
+        frameless=True, on_top=True, hidden=True)
     ball = webview.create_window(
         "", f"http://127.0.0.1:{UI_PORT}/ball",
         js_api=api, width=68, height=68,
