@@ -28,7 +28,7 @@ The daily replay is borrowed from a wishlist I once wrote for how an *AI agent's
 
 ## Status
 
-Built for DEV Hacktoberfest 2026, Week 3 ("Slow and Steady"). Skeleton (polling, routing, arXiv metadata, filing, logging) runs today; Gemma note generation and daily replay land during the challenge week.
+Built for DEV Hacktoberfest 2026, Week 3 ("Slow and Steady"). End-to-end generation works (verified 2026-10-20 on the target machine): drop a paper link or a discussion log in the inbox and a local Gemma turns it into a structured study note / concept card in the vault. Still landing this week: [[concept]] backlink suggestions and the daily replay card.
 
 ## Quick start
 
