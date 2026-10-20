@@ -29,6 +29,12 @@ inbox/  ──▶  route  ──▶  fetch / read  ──▶  local Gemma writes
 
 *Landing this week: candidate `[[backlinks]]` between notes, and the daily replay card.*
 
+## The app
+
+LazyScholar ships with a built-in web app — **no Obsidian required**. While the butler runs, open `http://127.0.0.1:8765` in any browser: a sidebar shows your inbox status, paper notes and concept cards, and the reading pane renders each note as a calm, magazine-like page. Model offline? The status pill tells you. Something failed today? A banner points you at the error card. The app and Obsidian read the same files, so use either — or both.
+
+To run just the app without the butler: `python lazyscholar.py --vault <path> --ui`.
+
 ## What you drop in, what you get out
 
 | You drop into `inbox/` | You get | Where |
@@ -109,7 +115,7 @@ Using the llama.cpp desktop app's built-in server instead? It listens on `http:/
 
 ## Status
 
-Built for DEV Hacktoberfest 2026, Week 3 ("Slow and Steady"). End-to-end generation is verified working on the target machine (2026-10-20): a dropped arXiv link produced a full study note, and a discussion log produced a concept card, with sources archived and zero manual steps. Landing in the next two days: `[[backlink]]` suggestions and the daily replay card; then the DEV write-up.
+Built for DEV Hacktoberfest 2026, Week 3 ("Slow and Steady"). End-to-end generation is verified working on the target machine (2026-10-20): a dropped arXiv link produced a full study note, and a discussion log produced a concept card, with sources archived and zero manual steps. The built-in sidebar web app landed the same evening and is verified against real notes. Still to come this week: `[[backlink]]` suggestions and the daily replay card; then the DEV write-up.
 
 ## License
 
