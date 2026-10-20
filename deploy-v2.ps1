@@ -12,10 +12,15 @@ Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'python' -and $_.C
 Start-Sleep 2
 Note 'old processes stopped'
 
-# 2. Sync the vault copy (script + pdf.js vendor)
+# 2. Sync the vault copy (script + shell layer + pdf.js vendor)
 Copy-Item 'D:\lazyscholar\lazyscholar.py' 'D:\LazyScholarVault\lazyscholar.py' -Force
+Copy-Item 'D:\lazyscholar\app_shell.py' 'D:\LazyScholarVault\app_shell.py' -Force
 Copy-Item 'D:\lazyscholar\vendor' 'D:\LazyScholarVault\vendor' -Recurse -Force
 Note 'vault synced'
+
+# 2b. v4 dependency: pystray (system tray). Harmless if already present.
+python -m pip install pystray 2>&1 | Out-File $log -Append -Encoding utf8
+Note 'pystray ensured'
 
 # 3. Rebuild the packaged app
 cmd /c 'D:\lazyscholar\build-app.cmd'

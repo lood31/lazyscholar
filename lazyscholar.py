@@ -1287,18 +1287,27 @@ def _serve_ui_safe(vault: Path, open_browser: bool) -> None:
 
 
 def run_app(vault: Path, interval: int) -> int:
-    """Packaged-app mode (v3): butler + scheduler + web UI in threads;
-    in front, a small floating ball docked to the right edge of the
-    screen; clicking it opens the main UI as a frameless side panel
-    docked to the right edge (the Grammarly pose: icon rail on the
-    panel's right side, ball staying visible at the extreme edge).
-    The panel's rail carries collapse/quit buttons; right-clicking
-    the ball quits. Falls back to headless if pywebview is missing."""
+    """Packaged-app mode (v4): butler + scheduler + web UI in threads;
+    the desktop shell lives in app_shell.py - a native layered-window
+    ball (truly transparent), a pystray tray icon that owns exit, a
+    single-instance mutex with wake-up, and the main panel as a
+    floating card (DWM rounded corners, native shadow, gap from the
+    screen edge, slide-in animation) driven by an AppController
+    command queue. Falls back to headless if pywebview is missing."""
     _ensure_vault(vault)
     log(vault, f"START app mode vault={vault}")
     cfg = load_config(vault)
     global LLAMA_BASE
     LLAMA_BASE = f"http://127.0.0.1:{int(cfg['port'])}"
+
+    import app_shell
+
+    if not app_shell.acquire_single_instance():
+        app_shell.signal_existing_instance()
+        print("LazyScholar is already running; woke its panel instead.",
+              flush=True)
+        return 0
+
     threading.Thread(target=_serve_ui_safe, args=(vault, False),
                      daemon=True).start()
     threading.Thread(target=_poll_loop, args=(vault, interval),
@@ -1316,48 +1325,38 @@ def run_app(vault: Path, interval: int) -> int:
         except KeyboardInterrupt:
             return 0
 
-    screen_w, screen_h = 1920, 1080
-    try:
-        import ctypes
-        screen_w = ctypes.windll.user32.GetSystemMetrics(0)
-        screen_h = ctypes.windll.user32.GetSystemMetrics(1)
-    except Exception:
-        pass
+    wa_l, wa_t, wa_r, wa_b = app_shell.work_area()
+    wa_w, wa_h = wa_r - wa_l, wa_b - wa_t
+    panel_w = 470
+    panel_h = max(620, min(wa_h - 24, 920))
+    panel_x = wa_r - panel_w - 84          # ball strip stays at the edge
+    panel_y = wa_t + max(0, (wa_h - panel_h) // 2)
+    hidden_x = wa_r + 8                    # fully off-screen to the right
 
-    state = {"main_visible": False, "main": None, "ball": None}
+    icon_path = None
+    for cand in (Path(getattr(sys, "_MEIPASS", "")) / "lazyscholar.ico",
+                 Path(__file__).resolve().parent / "lazyscholar.ico"):
+        if cand.exists():
+            icon_path = str(cand)
+            break
+
+    holder: dict = {}
 
     class AppApi:
         def toggle_main(self):
-            win = state["main"]
-            if win is None:
-                return
-            if state["main_visible"]:
-                win.hide()
-                state["main_visible"] = False
-            else:
-                win.show()
-                state["main_visible"] = True
+            holder["ctl"].toggle_panel()
 
         def hide_main(self):
-            win = state["main"]
-            if win is not None and state["main_visible"]:
-                win.hide()
-                state["main_visible"] = False
+            holder["ctl"].hide_panel()
 
         def quit_app(self):
-            for key in ("main", "ball"):
-                win = state.get(key)
-                if win is not None:
-                    try:
-                        win.destroy()
-                    except Exception:
-                        pass
+            holder["ctl"].quit()
 
         def pick_pdf(self):
             try:
                 dialog = getattr(webview, "FileDialog", None)
                 open_const = dialog.OPEN if dialog is not None else webview.OPEN_DIALOG
-                res = state["main"].create_file_dialog(
+                res = holder["panel"].create_file_dialog(
                     open_const, file_types=("PDF Files (*.pdf)",))
                 if res:
                     return res[0]
@@ -1366,33 +1365,73 @@ def run_app(vault: Path, interval: int) -> int:
             return None
 
     api = AppApi()
-    panel_w = 470
-    panel_h = max(620, min(screen_h - 28, 920))
-    main = webview.create_window(
+    panel = webview.create_window(
         "LazyScholar · 懒人学者", f"http://127.0.0.1:{UI_PORT}/app",
         js_api=api, width=panel_w, height=panel_h,
-        x=max(0, screen_w - panel_w - 84), y=max(0, (screen_h - panel_h) // 2),
-        frameless=True, on_top=True, hidden=True)
-    ball = webview.create_window(
-        "", f"http://127.0.0.1:{UI_PORT}/ball",
-        js_api=api, width=68, height=68,
-        x=max(0, screen_w - 76), y=max(0, screen_h // 2 - 34),
-        frameless=True, transparent=True, on_top=True)
-    state["main"], state["ball"] = main, ball
+        x=panel_x, y=panel_y,
+        frameless=True, on_top=True, hidden=True,
+        shadow=True, background_color="#F8F6F0")
+    holder["panel"] = panel
+
+    def _run_queue_now():
+        process_queue(vault)
+
+    def _open_vault():
+        try:
+            os.startfile(str(vault))  # Windows only; guarded by caller
+        except Exception:
+            pass
+
+    ctl = app_shell.AppController(
+        panel, (panel_x, panel_y, hidden_x),
+        run_queue_now=_run_queue_now,
+        open_vault=_open_vault if app_shell.WIN else None)
+    holder["ctl"] = ctl
 
     def _on_closing():
-        # Closing the main window just tucks it away; the ball stays.
-        if state["main_visible"]:
-            main.hide()
-            state["main_visible"] = False
-            return False
-        return True
+        # Closing the panel only tucks it away; exit belongs to the
+        # tray menu and the ball's right-click (via the controller).
+        if ctl.quitting:
+            return True
+        ctl.hide_panel()
+        return False
 
     try:
-        main.events.closing += _on_closing
+        panel.events.closing += _on_closing
     except Exception:
         pass
-    webview.start()
+
+    # Floating ball: native layered window on Windows; the old
+    # pywebview ball remains as a dev fallback elsewhere.
+    if app_shell.WIN:
+        ball_x = int(cfg.get("ball_x") or (wa_r - app_shell.BALL_SIZE - 8))
+        ball_y = int(cfg.get("ball_y") or (wa_t + (wa_h - app_shell.BALL_SIZE) // 2))
+
+        def _ball_moved(x, y):
+            fresh = load_config(vault)
+            fresh["ball_x"], fresh["ball_y"] = x, y
+            save_config(vault, fresh)
+
+        ctl.ball = app_shell.BallWindow(ctl, ball_x, ball_y, on_moved=_ball_moved)
+        ctl.ball.start()
+    else:
+        webview.create_window(
+            "", f"http://127.0.0.1:{UI_PORT}/ball",
+            js_api=api, width=68, height=68,
+            x=max(0, wa_r - 76), y=max(0, wa_t + wa_h // 2 - 34),
+            frameless=True, on_top=True)
+
+    ctl.tray = app_shell.build_tray(ctl, icon_path)
+    wake = app_shell.start_wake_listener(ctl.show_panel)
+    try:
+        webview.start(func=ctl.run, icon=icon_path)
+    except TypeError:
+        webview.start(func=ctl.run)
+    if wake is not None:
+        try:
+            wake.close()
+        except Exception:
+            pass
     log(vault, "STOP app mode")
     return 0
 
