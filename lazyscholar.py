@@ -524,6 +524,7 @@ CONFIG_DEFAULTS = {
     "ctx": 16384,
     "schedule": "23:30",
     "theme": "light",
+    "lang": "zh",
     "font_size": 16,
     "serif": True,
 }
@@ -795,319 +796,540 @@ document.addEventListener('contextmenu',e=>{ e.preventDefault(); if(window.pyweb
 </script></body></html>
 """
 
-APP_PAGE = r"""<!doctype html>
-<html lang="zh-CN" data-theme="light">
+APP_PAGE = r"""<!DOCTYPE html>
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LazyScholar · 懒人学者</title>
+<title>LazyScholar</title>
 <style>
-:root{--ink:#101318;--bg:#F8F6F0;--card:#FFFDF7;--text:#1B1E24;--muted:#8B8378;--copper:#B46A2B;--copper2:#E09A4C;--line:#E9E0CF;--banner:#F0D9BA;--soft:#FBF7EC}
-[data-theme="dark"]{--bg:#101114;--card:#191A1F;--text:#F2F0E9;--muted:#9A937F;--line:#2E2C26;--banner:#3A2C17;--soft:#17181C}
-*{box-sizing:border-box}
-html,body{margin:0;height:100%}
-body{font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text)}
-#app{display:grid;grid-template-columns:1fr 62px;height:100vh;box-shadow:-14px 0 34px rgba(16,19,24,.28)}
-#rail{grid-column:2;grid-row:1;background:var(--ink);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:8px}
-#content{grid-column:1;grid-row:1}
-#rail .logo{font-size:26px;background:var(--card);border-radius:14px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;margin-bottom:10px}
-#rail button{width:48px;padding:7px 0 5px;border:none;border-radius:12px;background:transparent;color:#CFC9BC;font-size:17px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px}
-#rail button span{font-size:10px}
-#rail button:hover{background:#1E2126}
-#rail button.on{background:#26221B;color:var(--copper2);box-shadow:inset -2px 0 0 var(--copper)}
-.railfoot{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:8px}
-#rail .mini{width:38px;padding:5px 0;font-size:14px}
-#dot{width:10px;height:10px;border-radius:50%;background:#B3402A;display:block}
-#dot.ok{background:#7A9A52}
-#content{overflow-y:auto;padding:24px 26px 50px}
-.panel{display:none;max-width:860px;margin:0 auto}
-.panel.on{display:block}
-h1{font-size:23px;margin:4px 0 6px;letter-spacing:.01em}
-.sub{color:var(--muted);font-size:13.5px;line-height:1.7;margin:0 0 14px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px 18px;margin-bottom:14px}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
-input[type=text],input:not([type]),input[type=number],select{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:8px 10px;color:var(--text);font-size:13.5px;flex:1;min-width:120px}
-input[type=time]{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:7px 9px;color:var(--text)}
-.btn{background:var(--ink);color:#F8F6F0;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer}
-.btn.copper{background:var(--copper)}
-.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
-.btn:active{transform:translateY(1px)}
-.msg{font-size:13px;color:var(--copper);min-height:18px}
-.frow{display:flex;align-items:center;gap:10px;margin:8px 0}
-.frow label{width:88px;flex:none;font-size:13px;color:var(--muted)}
-.frow input{flex:1}
-.qitem{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 14px;margin-bottom:8px}
-.qitem .lbl{flex:1;font-size:13.5px;word-break:break-all}
-.qitem .err{color:#B3402A;font-size:12px}
-.chip{font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;background:var(--banner);color:#7A5510;flex:none}
-.chip.done{background:var(--ink);color:#F8F6F0}
-.chip.fail{background:#B3402A;color:#fff}
-.chip.proc{background:var(--copper);color:#fff}
-.qitem .del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px}
-.nitem{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:11px 14px;margin-bottom:8px;cursor:pointer}
-.nitem:hover{border-color:var(--copper2)}
-.nitem .t{font-weight:600;font-size:14px;line-height:1.5}
-.nitem .d{color:var(--muted);font-size:12px;margin-top:3px}
-#n-body h1{font-family:Georgia,"Noto Serif SC","Songti SC",serif;font-size:24px;line-height:1.35}
-#n-body h2{font-family:Georgia,"Noto Serif SC","Songti SC",serif;font-size:18px;margin:24px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--line)}
-#n-body p{line-height:1.85;margin:7px 0}
-#n-body li{line-height:1.8;margin:4px 0}
-#n-body blockquote{background:var(--banner);border-left:3px solid var(--copper);margin:10px 0;padding:9px 13px;border-radius:0 12px 12px 0}
-#n-body code{background:var(--soft);padding:1px 6px;border-radius:6px}
-#n-body a{color:var(--copper)}
-.meta{font-size:12px;color:var(--muted);margin-bottom:4px}
-#reader{position:fixed;inset:0;background:var(--bg);z-index:60;display:none;flex-direction:column}
-#reader.on{display:flex}
-.rhead{display:flex;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--card)}
-#pages{overflow-y:auto;padding:16px 8px 60px}
-.page{position:relative;margin:0 auto 16px;background:#fff;box-shadow:0 2px 10px rgba(16,19,24,.18)}
-.page canvas{display:block}
-.textLayer{position:absolute;inset:0;overflow:hidden;line-height:1}
-.textLayer span{position:absolute;white-space:pre;color:transparent;transform-origin:0% 0%}
-.textLayer ::selection{background:rgba(180,106,43,.35)}
-.hl{position:absolute;background:rgba(217,154,76,.45);border-radius:2px;pointer-events:none}
-</style></head>
+  :root{
+    --ink:#101318; --copper:#B46A2B; --copper-bright:#E09A4C;
+    --paper:#F8F6F0; --card:#FFFDF8; --line:#E7DFCF; --muted:#8A8171;
+    --bg:var(--paper); --fg:#221F1A; --rail:var(--ink);
+  }
+  body.dark{
+    --bg:#101114; --fg:#ECE7DB; --card:#1B1C20; --line:#33322C; --muted:#9A927E;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:"Segoe UI","Microsoft YaHei",sans-serif;
+    background:var(--bg); color:var(--fg); overflow:hidden;
+    display:grid; grid-template-columns:1fr 62px;
+  }
+  #rail{
+    grid-column:2; grid-row:1; background:var(--rail);
+    display:flex; flex-direction:column; align-items:center;
+    padding:12px 0 10px; gap:6px; user-select:none;
+  }
+  #rail .logo{
+    font-size:24px; width:42px; height:42px; border-radius:12px;
+    background:var(--paper); display:flex; align-items:center; justify-content:center;
+    margin-bottom:10px;
+  }
+  #rail button{
+    width:52px; padding:7px 0 6px; border:0; border-radius:12px; cursor:pointer;
+    background:transparent; color:#CFC9BB; font-size:11px;
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    font-family:inherit;
+  }
+  #rail button .ic{font-size:19px; line-height:1;}
+  #rail button:hover{background:#1E222B; color:#fff;}
+  #rail button.active{background:#262B36; color:#fff; box-shadow:inset -2px 0 0 var(--copper-bright);}
+  #rail .spacer{flex:1;}
+  #rail .winbtn{font-size:15px; padding:5px 0; width:42px; border-radius:10px;}
+  #rail .dot{width:9px; height:9px; border-radius:50%; background:#C0392B; margin-top:6px;}
+  #rail .dot.on{background:#3FA46A;}
+  .panel{
+    grid-column:1; grid-row:1; height:100%; overflow-y:auto;
+    padding:20px 20px 24px; scrollbar-width:thin;
+  }
+  .page{display:none;}
+  .page.active{display:block;}
+  h2{font-family:Georgia,"Songti SC","SimSun",serif; font-size:21px; margin-bottom:6px;}
+  .sub{color:var(--muted); font-size:13px; line-height:1.55; margin-bottom:16px;}
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:16px;
+    padding:16px; margin-bottom:14px;
+  }
+  label{display:block; font-size:12.5px; color:var(--muted); margin:10px 0 4px;}
+  label:first-child{margin-top:0;}
+  input[type=text], input[type=number], input[type=time], select{
+    width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:10px;
+    background:var(--bg); color:var(--fg); font-size:14px; font-family:inherit;
+  }
+  .row{display:flex; gap:9px; align-items:center;}
+  .row > *{flex:0 0 auto;}
+  .row .grow{flex:1;}
+  button.btn{
+    border:0; border-radius:11px; padding:10px 16px; cursor:pointer;
+    font-size:14px; font-family:inherit; background:var(--ink); color:#F5F1E8;
+  }
+  body.dark button.btn{background:var(--copper); color:#14100B;}
+  button.btn.copper{background:var(--copper); color:#FFF7EA;}
+  button.btn.ghost{background:transparent; color:var(--fg); border:1px solid var(--line);}
+  button.btn:disabled{opacity:.45; cursor:default;}
+  .qitem, .note{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:12px 14px; margin-bottom:9px;
+  }
+  .qitem .ttl{font-weight:600; font-size:14px; word-break:break-all;}
+  .qitem .meta, .note .meta{color:var(--muted); font-size:12px; margin-top:3px;}
+  .qitem .del{float:right; border:0; background:none; color:var(--muted); cursor:pointer; font-size:12px; font-family:inherit;}
+  .st{font-weight:600;}
+  .st-pending{color:var(--muted);} .st-processing{color:var(--copper);}
+  .st-done{color:#3FA46A;} .st-failed{color:#C0392B;}
+  .note{cursor:pointer;}
+  .note:hover{border-color:var(--copper-bright);}
+  .note .ttl{font-family:Georgia,"Songti SC","SimSun",serif; font-size:16px; font-weight:600;}
+  .badge{
+    display:inline-block; font-size:11px; padding:1.5px 8px; border-radius:20px;
+    background:#F0D9BA; color:#7A4A16; margin-right:6px; vertical-align:2px;
+  }
+  body.dark .badge{background:#453A28; color:#E9C48A;}
+  .empty{color:var(--muted); font-size:13.5px; padding:16px 2px; line-height:1.6;}
+  .status-line{font-size:14px; margin-bottom:10px;}
+  .status-line b{color:var(--copper);}
+  body.dark .status-line b{color:var(--copper-bright);}
+  .flash{color:#3FA46A; font-size:13px; margin-left:8px;}
+  /* reader overlay */
+  #reader{
+    position:fixed; inset:0; background:var(--bg); display:none;
+    flex-direction:column; z-index:50;
+  }
+  #reader.open{display:flex;}
+  #reader .bar{
+    display:flex; align-items:center; gap:8px; padding:10px 14px;
+    border-bottom:1px solid var(--line);
+  }
+  #reader .bar .ttl{font-family:Georgia,"Songti SC","SimSun",serif; font-weight:600; font-size:16px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  #reader .bar button{padding:7px 12px; font-size:13px;}
+  #reader .bar button.on{background:var(--copper); color:#FFF7EA;}
+  #pdf-wrap{flex:1; overflow-y:auto; padding:14px 10px; text-align:center;}
+  #pdf-wrap canvas{margin:0 auto 12px; display:block; box-shadow:0 2px 14px rgba(16,19,24,.25); max-width:100%;}
+  #pdf-wrap .pg{position:relative; margin:0 auto 12px; width:fit-content;}
+  #pdf-wrap .pg canvas{margin:0;}
+  #pdf-wrap .txtlayer{position:absolute; inset:0; overflow:hidden;}
+  #pdf-wrap .txtlayer span{position:absolute; white-space:pre; transform-origin:0 0; color:transparent;}
+  #pdf-wrap .hl{position:absolute; background:rgba(224,154,76,.45); border-radius:2px; pointer-events:none;}
+  #note-body{flex:1; overflow-y:auto; padding:18px 22px; display:none;}
+  #note-body .md{max-width:640px; margin:0 auto; line-height:1.75; font-size:15px; white-space:pre-wrap; word-break:break-word; font-family:Georgia,"Songti SC","SimSun",serif;}
+</style>
+</head>
 <body>
-<div id="app">
-  <nav id="rail">
-    <div class="logo pywebview-drag-region" title="拖动我可以移动面板">🦥</div>
-    <button data-tab="queue" class="on">📥<span>队列</span></button>
-    <button data-tab="notes">📝<span>笔记</span></button>
-    <button data-tab="model">🦙<span>模型</span></button>
-    <button data-tab="settings">⚙️<span>设置</span></button>
-    <div class="railfoot">
-      <button class="mini" id="win-hide" title="收起面板">—</button>
-      <button class="mini" id="win-quit" title="退出 LazyScholar">⏻</button>
-      <span id="dot" title="模型状态"></span>
-    </div>
-  </nav>
-  <main id="content">
-    <section id="tab-queue" class="panel on">
-      <h1>论文队列</h1>
-      <p class="sub">把论文先排队，不用等。每天 <b id="q-sched">23:30</b> 管家会自己把模型打开、批量处理完再关掉；等不及就点「立即处理」。</p>
+  <main class="panel">
+    <section class="page active" id="page-queue">
+      <h2 data-i18n="q_title">论文队列</h2>
+      <p class="sub" data-i18n="q_sub">把论文先排队，不用等。每天 <b>23:30</b> 管家会自己把模型打开、批量处理完再关掉；等不及点「立即处理」。</p>
       <div class="card">
-        <div class="row"><input id="link-in" placeholder="粘贴 arXiv 链接，如 https://arxiv.org/abs/2510.16720"><button class="btn" id="add-link">＋ 加入队列</button></div>
-        <div class="row"><button class="btn ghost" id="pick-pdf">选择本地 PDF…</button><button class="btn copper" id="run-now">立即处理队列</button></div>
-        <div id="q-msg" class="msg"></div>
+        <div class="row">
+          <input type="text" id="q-input" class="grow" data-i18n-ph="q_ph" placeholder="粘贴 arXiv 链接，如 https://arxiv.org/abs/…">
+          <button class="btn" id="btn-add" data-i18n="q_add">加入队列</button>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <button class="btn ghost" id="btn-pick" data-i18n="q_pick">选择本地 PDF…</button>
+          <button class="btn copper" id="btn-run" data-i18n="q_run">立即处理队列</button>
+        </div>
       </div>
-      <div id="q-list"></div>
+      <div id="qlist"></div>
     </section>
-    <section id="tab-notes" class="panel">
-      <h1>笔记卡片</h1>
-      <p class="sub">管家写好的都在这里。点开看全文；论文笔记还能直接进内置阅读器读原文、划线。</p>
-      <div id="n-list"></div>
-      <article id="n-view" class="card" hidden>
-        <div class="meta" id="n-meta"></div>
-        <div id="n-body"></div>
-        <div class="row"><button class="btn copper" id="read-pdf" hidden>📖 在阅读器里读这篇论文</button></div>
-      </article>
+
+    <section class="page" id="page-notes">
+      <h2 data-i18n="n_title">笔记卡片</h2>
+      <p class="sub" data-i18n="n_sub">管家生成的精读笔记与概念卡都在这里，点开可读论文原文并划线。</p>
+      <input type="text" id="n-search" data-i18n-ph="n_ph" placeholder="搜索标题或关键词…">
+      <div id="nlist" style="margin-top:14px;"></div>
     </section>
-    <section id="tab-model" class="panel">
-      <h1>本地模型</h1>
-      <p class="sub">状态：<b id="m-state">…</b></p>
+
+    <section class="page" id="page-model">
+      <h2 data-i18n="m_title">本地模型</h2>
+      <p class="sub" data-i18n="m_sub">模型不用一直开着：在这里手动开关，或者让管家每天定时自己跑。</p>
       <div class="card">
-        <div class="frow"><label>llama 程序</label><input id="m-exe"></div>
-        <div class="frow"><label>模型文件</label><input id="m-model"></div>
-        <div class="frow"><label>端口</label><input id="m-port" type="number"></div>
-        <div class="frow"><label>上下文</label><input id="m-ctx" type="number"></div>
-        <div class="row"><button class="btn" id="m-save">保存配置</button><button class="btn copper" id="m-start">启动模型</button><button class="btn ghost" id="m-stop">停止</button><button class="btn ghost" id="m-test">测试连接</button></div>
-        <div id="m-msg" class="msg"></div>
+        <div class="status-line"><span data-i18n="m_status">模型状态：</span><b id="m-state">…</b></div>
+        <div class="row">
+          <button class="btn copper" id="btn-mstart" data-i18n="m_start">启动模型</button>
+          <button class="btn ghost" id="btn-mstop" data-i18n="m_stop">停止模型</button>
+        </div>
+        <div class="meta" style="color:var(--muted); font-size:12.5px; margin-top:12px;">
+          <span data-i18n="m_addr">服务地址：</span><span id="m-addr">—</span>
+        </div>
+      </div>
+      <div class="card">
+        <label><span data-i18n="m_every">每天</span> <input type="time" id="f-schedule2" style="width:130px; display:inline-block;"> <span data-i18n="m_sched">自动运行队列（管家会自己开关模型）</span></label>
+        <div class="row" style="margin-top:12px;">
+          <button class="btn" id="btn-save-model" data-i18n="save">保存设置</button><span class="flash" id="flash2"></span>
+        </div>
       </div>
     </section>
-    <section id="tab-settings" class="panel">
-      <h1>设置</h1>
+
+    <section class="page" id="page-settings">
+      <h2 data-i18n="s_title">设置</h2>
       <div class="card">
-        <div class="frow"><label>定时处理</label><input id="s-sched" type="time"></div>
-        <div class="frow"><label>主题</label><select id="s-theme"><option value="light">白天</option><option value="dark">黑夜</option></select></div>
-        <div class="frow"><label>阅读字号</label><input id="s-font" type="range" min="14" max="20" step="1" style="flex:1"></div>
-        <div class="frow"><label>衬线字体</label><input id="s-serif" type="checkbox"></div>
-        <div class="frow"><label>仓库位置</label><input id="s-vault" disabled></div>
-        <div class="row"><button class="btn" id="s-save">保存设置</button></div>
-        <div id="s-msg" class="msg"></div>
+        <label data-i18n="s_exe">模型可执行文件 (llama)</label>
+        <input type="text" id="f-exe">
+        <label data-i18n="s_model">模型文件（GGUF）</label>
+        <input type="text" id="f-model">
+        <div class="row">
+          <div class="grow">
+            <label data-i18n="s_port">服务端口</label>
+            <input type="number" id="f-port">
+          </div>
+          <div class="grow">
+            <label data-i18n="s_ctx">上下文长度</label>
+            <input type="number" id="f-ctx">
+          </div>
+        </div>
+        <label data-i18n="s_lang">界面语言</label>
+        <select id="f-lang">
+          <option value="zh">中文</option>
+          <option value="en">English</option>
+        </select>
+        <label data-i18n="s_theme">界面主题</label>
+        <select id="f-theme">
+          <option value="light" data-i18n="th_light">浅色</option>
+          <option value="dark" data-i18n="th_dark">深色</option>
+        </select>
+        <div class="row">
+          <div class="grow">
+            <label><span data-i18n="s_font">阅读字号</span> (px)</label>
+            <input type="number" id="f-font" min="13" max="20">
+          </div>
+          <div class="grow">
+            <label data-i18n="s_sched">定时运行时间</label>
+            <input type="time" id="f-schedule">
+          </div>
+        </div>
+        <div class="row" style="margin-top:14px;">
+          <button class="btn" id="btn-save" data-i18n="save">保存设置</button><span class="flash" id="flash"></span>
+        </div>
       </div>
     </section>
   </main>
-</div>
-<div id="reader">
-  <div class="rhead"><button class="btn ghost" id="r-back">← 返回笔记</button><b id="r-title"></b><span class="sub" style="margin:0">选中文字即可划线，高亮会自动保存</span></div>
-  <div id="pages"></div>
-</div>
-<script src="/vendor/pdf.min.js"></script>
+
+  <nav id="rail">
+    <div class="logo pywebview-drag-region">🦥</div>
+    <button data-tab="queue" class="active"><span class="ic">📥</span><span data-i18n="tab_queue">队列</span></button>
+    <button data-tab="notes"><span class="ic">📝</span><span data-i18n="tab_notes">笔记</span></button>
+    <button data-tab="model"><span class="ic">🦙</span><span data-i18n="tab_model">模型</span></button>
+    <button data-tab="settings"><span class="ic">⚙️</span><span data-i18n="tab_settings">设置</span></button>
+    <div class="spacer"></div>
+    <button class="winbtn" id="win-hide" data-i18n-title="hide" title="收起">—</button>
+    <button class="winbtn" id="win-quit" data-i18n-title="quit" title="退出应用">⏻</button>
+    <div class="dot" id="m-dot"></div>
+  </nav>
+
+  <div id="reader">
+    <div class="bar">
+      <span class="ttl" id="r-title"></span>
+      <button class="btn ghost" id="btn-hl" data-i18n="r_hl">划线模式</button>
+      <button class="btn ghost" id="btn-hl-clear" data-i18n="r_hl_clear">清除划线</button>
+      <button class="btn" id="btn-reader-close" data-i18n="r_close">关闭</button>
+    </div>
+    <div id="pdf-wrap"></div>
+    <div id="note-body"><div class="md" id="note-md"></div></div>
+  </div>
+
 <script>
-let CFG = {}, curArxiv = null, curNoteName = '';
-const $ = id => document.getElementById(id);
-function esc(s){return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-async function jget(u){ const r = await fetch(u); return r.json(); }
-async function jpost(u, body){ const r = await fetch(u, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})}); return r.json(); }
+const $ = s => document.querySelector(s);
+let LANG = 'zh';
+let settingsLoaded = false;
 
-document.querySelectorAll('#rail button[data-tab]').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('#rail button[data-tab]').forEach(x => x.classList.toggle('on', x === b));
-  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('on', p.id === 'tab-' + b.dataset.tab));
-  if(b.dataset.tab === 'notes') loadNotes();
-  if(b.dataset.tab === 'queue') loadQueue();
-}));
-$('win-hide').addEventListener('click', () => { if(window.pywebview && window.pywebview.api) window.pywebview.api.hide_main(); });
-$('win-quit').addEventListener('click', () => { if(window.pywebview && window.pywebview.api) window.pywebview.api.quit_app(); });
+const STR = {
+zh: {
+  tab_queue:'队列', tab_notes:'笔记', tab_model:'模型', tab_settings:'设置',
+  hide:'收起', quit:'退出应用',
+  q_title:'论文队列',
+  q_sub:'把论文先排队，不用等。每天 <b>23:30</b> 管家会自己把模型打开、批量处理完再关掉；等不及点「立即处理」。',
+  q_ph:'粘贴 arXiv 链接，如 https://arxiv.org/abs/…', q_add:'加入队列',
+  q_pick:'选择本地 PDF…', q_run:'立即处理队列',
+  q_empty:'队列是空的。把下一篇论文丢进来排队吧。',
+  q_src_link:'链接', q_src_file:'本地文件',
+  st_pending:'排队中', st_processing:'处理中', st_done:'完成', st_failed:'失败', del:'删除',
+  n_title:'笔记卡片', n_sub:'管家生成的精读笔记与概念卡都在这里，点开可读论文原文并划线。',
+  n_ph:'搜索标题或关键词…', badge_paper:'论文笔记', badge_concept:'概念卡',
+  untitled:'未命名讨论', n_empty:'还没有笔记。先去队列里丢一篇论文吧。',
+  m_title:'本地模型', m_sub:'模型不用一直开着：在这里手动开关，或者让管家每天定时自己跑。',
+  m_status:'模型状态：', m_start:'启动模型', m_stop:'停止模型', m_addr:'服务地址：',
+  m_every:'每天', m_sched:'自动运行队列（管家会自己开关模型）',
+  save:'保存设置', saved:'已保存 ✓',
+  m_running:'运行中', m_stopped:'未运行', m_checking:'检测中…',
+  s_title:'设置', s_exe:'模型可执行文件 (llama)', s_model:'模型文件（GGUF）',
+  s_port:'服务端口', s_ctx:'上下文长度', s_lang:'界面语言', s_theme:'界面主题',
+  th_light:'浅色', th_dark:'深色', s_font:'阅读字号', s_sched:'定时运行时间',
+  r_hl:'划线模式', r_hl_exit:'退出划线', r_hl_clear:'清除划线', r_close:'关闭',
+  pdf_loading:'正在下载原 PDF…', pdf_none:'该论文暂无 PDF。'
+},
+en: {
+  tab_queue:'Queue', tab_notes:'Notes', tab_model:'Model', tab_settings:'Settings',
+  hide:'Collapse', quit:'Quit LazyScholar',
+  q_title:'Paper Queue',
+  q_sub:'Queue papers now, process them later. Every day at <b>23:30</b> the butler starts the local model on its own, works through the queue, then shuts it down. In a hurry? Hit “Process now”.',
+  q_ph:'Paste an arXiv link, e.g. https://arxiv.org/abs/…', q_add:'Add to queue',
+  q_pick:'Choose a local PDF…', q_run:'Process queue now',
+  q_empty:'The queue is empty. Drop in the next paper.',
+  q_src_link:'Link', q_src_file:'Local file',
+  st_pending:'Queued', st_processing:'Processing', st_done:'Done', st_failed:'Failed', del:'Delete',
+  n_title:'Note Cards', n_sub:'Study notes and concept cards made by the butler. Open one to read the paper and highlight it.',
+  n_ph:'Search titles or keywords…', badge_paper:'Study note', badge_concept:'Concept card',
+  untitled:'Untitled discussion', n_empty:'No notes yet. Queue a paper first.',
+  m_title:'Local Model', m_sub:'The model does not need to stay on: start or stop it here, or let the butler run it on a daily schedule.',
+  m_status:'Model status:', m_start:'Start model', m_stop:'Stop model', m_addr:'Service:',
+  m_every:'Every day at', m_sched:'auto-process the queue (the butler starts and stops the model itself)',
+  save:'Save settings', saved:'Saved ✓',
+  m_running:'Running', m_stopped:'Stopped', m_checking:'Checking…',
+  s_title:'Settings', s_exe:'Model executable (llama)', s_model:'Model file (GGUF)',
+  s_port:'Service port', s_ctx:'Context length', s_lang:'Language', s_theme:'Theme',
+  th_light:'Light', th_dark:'Dark', s_font:'Reading font size', s_sched:'Daily run time',
+  r_hl:'Highlight', r_hl_exit:'Exit highlight', r_hl_clear:'Clear highlights', r_close:'Close',
+  pdf_loading:'Downloading the paper PDF…', pdf_none:'No PDF for this paper.'
+}};
+const t = k => (STR[LANG] && STR[LANG][k]) || STR.zh[k] || k;
 
-function applyPrefs(){
-  document.documentElement.dataset.theme = CFG.theme || 'light';
-  const nb = $('n-body');
-  nb.style.fontSize = (CFG.font_size || 16) + 'px';
-  nb.style.fontFamily = CFG.serif === false ? 'inherit' : 'Georgia,"Noto Serif SC","Songti SC",serif';
+function applyLang(l){
+  LANG = (l === 'en') ? 'en' : 'zh';
+  document.documentElement.lang = LANG === 'en' ? 'en' : 'zh-CN';
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.innerHTML = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+  $('#btn-hl').textContent = hlMode ? t('r_hl_exit') : t('r_hl');
+  refreshQueue(); renderNotes(window._notes || []); refreshModel();
 }
-async function loadConfig(){
-  CFG = await jget('/api/config');
-  $('m-exe').value = CFG.llama_exe || ''; $('m-model').value = CFG.model_path || '';
-  $('m-port').value = CFG.port || 8080; $('m-ctx').value = CFG.ctx || 16384;
-  $('s-sched').value = CFG.schedule || '23:30'; $('s-theme').value = CFG.theme || 'light';
-  $('s-font').value = CFG.font_size || 16; $('s-serif').checked = CFG.serif !== false;
-  $('q-sched').textContent = CFG.schedule || '23:30';
-  applyPrefs();
-}
-async function loadState(){
-  try{
-    const s = await jget('/api/state');
-    $('dot').className = s.llama_up ? 'ok' : ''; $('dot').id = 'dot';
-    $('m-state').textContent = s.llama_up ? '在线，随时能干活' : '未启动（处理队列时会自动打开）';
-    if(s.vault) $('s-vault').value = s.vault;
-    if(s.batch_running) $('q-msg').textContent = '正在处理队列…';
-  }catch(e){}
-}
-const CHIP = {pending:['chip','等待中'], processing:['chip proc','处理中'], done:['chip done','已完成'], failed:['chip fail','失败']};
-async function loadQueue(){
-  const items = await jget('/api/queue');
-  $('q-list').innerHTML = items.length ? items.map(it => {
-    const c = CHIP[it.status] || CHIP.pending;
-    return '<div class="qitem"><span class="' + c[0] + '">' + c[1] + '</span><span class="lbl">' + esc(it.label || it.value) +
-      (it.error ? '<br><span class="err">' + esc(it.error) + '</span>' : '') +
-      (it.note ? '<br><span style="color:var(--muted);font-size:12px">→ ' + esc(it.note) + '</span>' : '') +
-      '</span>' + (it.status !== 'processing' ? '<button class="del" data-id="' + it.id + '" title="移除">✕</button>' : '') + '</div>';
-  }).join('') : '<p class="sub">队列是空的。把下一篇论文丢进来排队吧。</p>';
-  document.querySelectorAll('.qitem .del').forEach(b => b.addEventListener('click', async () => { await jpost('/api/queue/delete', {id: b.dataset.id}); loadQueue(); }));
-}
-$('add-link').addEventListener('click', async () => {
-  const v = $('link-in').value.trim(); if(!v) return;
-  const r = await jpost('/api/queue', {kind:'link', value:v});
-  $('q-msg').textContent = r.ok ? '已加入队列 🦥' : ('出错了：' + (r.msg || ''));
-  if(r.ok){ $('link-in').value = ''; loadQueue(); }
-});
-$('pick-pdf').addEventListener('click', async () => {
-  let p = null;
-  if(window.pywebview && window.pywebview.api && window.pywebview.api.pick_pdf){ p = await window.pywebview.api.pick_pdf(); }
-  else { p = prompt('粘贴本地 PDF 的完整路径：'); }
-  if(!p) return;
-  const r = await jpost('/api/queue', {kind:'pdf', value:p});
-  $('q-msg').textContent = r.ok ? 'PDF 已加入队列 🦥' : ('出错了：' + (r.msg || ''));
-  if(r.ok) loadQueue();
-});
-$('run-now').addEventListener('click', async () => {
-  $('q-msg').textContent = '已开始处理，模型启动需要十几秒…';
-  const r = await jpost('/api/queue/run', {});
-  $('q-msg').textContent = r.ok ? '处理完成，看看笔记页' : ('处理结束：' + (r.msg || '部分失败，看队列里的红色标记'));
-  loadQueue(); loadState();
-});
-async function loadNotes(){
-  const s = await jget('/api/notes');
-  const all = s.papers.map(p => ({...p, kind:'papers'})).concat(s.concepts.map(c => ({...c, kind:'concepts'})));
-  all.sort((a, b) => b.mtime - a.mtime);
-  $('n-list').innerHTML = all.length ? all.map(n => '<div class="nitem" data-kind="' + n.kind + '" data-name="' + esc(n.name) + '"><div class="t">' + (n.kind === 'papers' ? '📚 ' : '💡 ') + esc(n.title) + '</div><div class="d">' + n.date + '</div></div>').join('') : '<p class="sub">还没有笔记。</p>';
-  document.querySelectorAll('.nitem').forEach(d => d.addEventListener('click', () => openNote(d.dataset.kind, d.dataset.name)));
-}
-async function openNote(kind, name){
-  const n = await jget('/api/note?kind=' + encodeURIComponent(kind) + '&name=' + encodeURIComponent(name));
-  $('n-view').hidden = false;
-  $('n-meta').textContent = (kind === 'papers' ? '📚 论文笔记' : '💡 概念卡片') + ' · ' + n.date;
-  $('n-body').innerHTML = n.html;
-  curArxiv = n.arxiv || null; curNoteName = n.title || '';
-  $('read-pdf').hidden = !curArxiv;
-  $('n-view').scrollIntoView({behavior:'smooth'});
-}
-$('m-save').addEventListener('click', async () => {
-  await jpost('/api/config', {llama_exe: $('m-exe').value.trim(), model_path: $('m-model').value.trim(), port: parseInt($('m-port').value || '8080'), ctx: parseInt($('m-ctx').value || '16384')});
-  $('m-msg').textContent = '配置已保存'; loadConfig();
-});
-$('m-start').addEventListener('click', async () => { $('m-msg').textContent = '正在启动模型，十几秒…'; const r = await jpost('/api/model/start', {}); $('m-msg').textContent = r.ok ? '模型已启动' : ('启动失败：' + (r.msg || '')); loadState(); });
-$('m-stop').addEventListener('click', async () => { await jpost('/api/model/stop', {}); $('m-msg').textContent = '已停止（如果是别的方式启动的模型，这里停不掉它）'; loadState(); });
-$('m-test').addEventListener('click', async () => { const s = await jget('/api/state'); $('m-msg').textContent = s.llama_up ? '连接正常，模型在线 ✅' : '连不上，模型没在运行'; });
-$('s-save').addEventListener('click', async () => {
-  CFG = await jpost('/api/config', {schedule: $('s-sched').value || '23:30', theme: $('s-theme').value, font_size: parseInt($('s-font').value || '16'), serif: $('s-serif').checked});
-  $('s-msg').textContent = '设置已保存'; $('q-sched').textContent = CFG.schedule; applyPrefs();
-});
-$('s-theme').addEventListener('change', () => { document.documentElement.dataset.theme = $('s-theme').value; });
 
-/* ---------------- PDF reader with highlights ---------------- */
-let pdfDoc = null, hlData = {highlights: []};
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdf.worker.min.js';
-$('read-pdf').addEventListener('click', () => openReader());
-$('r-back').addEventListener('click', () => { $('reader').classList.remove('on'); });
-async function openReader(){
-  if(!curArxiv) return;
-  $('reader').classList.add('on');
-  $('r-title').textContent = curNoteName;
-  $('pages').innerHTML = '<p class="sub" style="text-align:center">正在从 arXiv 取 PDF…（第一次会慢一点，之后有缓存）</p>';
-  try{
-    hlData = await jget('/api/highlights?id=' + encodeURIComponent(curArxiv));
-    const buf = await (await fetch('/api/pdf?id=' + encodeURIComponent(curArxiv))).arrayBuffer();
-    pdfDoc = await pdfjsLib.getDocument({data: buf}).promise;
-    $('pages').innerHTML = '';
-    for(let i = 1; i <= pdfDoc.numPages; i++){ await renderPage(i); }
-  }catch(e){ $('pages').innerHTML = '<p class="sub" style="text-align:center">PDF 打开失败：' + esc(String(e)) + '</p>'; }
-}
-async function renderPage(num){
-  const page = await pdfDoc.getPage(num);
-  const cont = $('pages');
-  const base = page.getViewport({scale: 1});
-  const scale = Math.min(860, cont.clientWidth - 24) / base.width;
-  const vp = page.getViewport({scale});
-  const wrap = document.createElement('div');
-  wrap.className = 'page'; wrap.dataset.page = num;
-  wrap.style.width = vp.width + 'px'; wrap.style.height = vp.height + 'px';
-  const cv = document.createElement('canvas');
-  cv.width = vp.width; cv.height = vp.height;
-  wrap.appendChild(cv);
-  const tl = document.createElement('div'); tl.className = 'textLayer'; wrap.appendChild(tl);
-  cont.appendChild(wrap);
-  await page.render({canvasContext: cv.getContext('2d'), viewport: vp}).promise;
-  const tc = await page.getTextContent();
-  pdfjsLib.renderTextLayer({textContentSource: tc, container: tl, viewport: vp, textDivs: []});
-  drawHighlights(wrap, num);
-}
-function drawHighlights(wrap, num){
-  wrap.querySelectorAll('.hl').forEach(e => e.remove());
-  hlData.highlights.filter(h => h.page === num).forEach(h => {
-    h.rects.forEach(r => {
-      const d = document.createElement('div'); d.className = 'hl';
-      d.style.left = (r[0] * 100) + '%'; d.style.top = (r[1] * 100) + '%';
-      d.style.width = (r[2] * 100) + '%'; d.style.height = (r[3] * 100) + '%';
-      wrap.appendChild(d);
-    });
+/* ---------- tabs ---------- */
+document.querySelectorAll('#rail button[data-tab]').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#rail button[data-tab]').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    $('#page-' + b.dataset.tab).classList.add('active');
+    if (b.dataset.tab === 'notes') refreshNotes();
+    if (b.dataset.tab === 'queue') refreshQueue();
+    try { window.pywebview.api.set_panel_tab(b.dataset.tab); } catch(e) {}
   });
+});
+$('#win-hide').addEventListener('click', () => { try { window.pywebview.api.hide_main(); } catch(e) {} });
+$('#win-quit').addEventListener('click', () => { try { window.pywebview.api.quit_app(); } catch(e) {} });
+
+/* ---------- queue ---------- */
+async function refreshQueue(){
+  try {
+    const d = await (await fetch('/api/queue')).json();
+    const box = $('#qlist');
+    if (!d.queue.length) { box.innerHTML = `<div class="empty">${t('q_empty')}</div>`; return; }
+    box.innerHTML = d.queue.map(it => `
+      <div class="qitem">
+        <button class="del" data-del="${it.id}">${t('del')}</button>
+        <div class="ttl">${escapeHtml(it.title || it.source)}</div>
+        <div class="meta">${it.kind === 'file' ? t('q_src_file') : t('q_src_link')} · <span class="st st-${it.status}">${t('st_' + it.status)}</span>${it.error ? ' · ' + escapeHtml(it.error) : ''}</div>
+      </div>`).join('');
+    box.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
+      await fetch('/api/queue/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: b.dataset.del})});
+      refreshQueue();
+    }));
+  } catch(e) {}
+}
+$('#btn-add').addEventListener('click', async () => {
+  const v = $('#q-input').value.trim(); if (!v) return;
+  await fetch('/api/queue', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({source: v})});
+  $('#q-input').value = ''; refreshQueue();
+});
+$('#btn-pick').addEventListener('click', async () => {
+  let path = null;
+  try { path = await window.pywebview.api.pick_pdf(); } catch(e) {}
+  if (path) {
+    await fetch('/api/queue', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({source: path})});
+    refreshQueue();
+  }
+});
+$('#btn-run').addEventListener('click', async () => {
+  $('#btn-run').disabled = true;
+  try { await fetch('/api/queue/run', {method:'POST'}); } catch(e) {}
+  $('#btn-run').disabled = false; refreshQueue(); refreshNotes();
+});
+
+/* ---------- notes + reader ---------- */
+let notesCache = [];
+async function refreshNotes(){
+  try {
+    const d = await (await fetch('/api/notes')).json();
+    notesCache = d.notes || [];
+    window._notes = notesCache;
+    renderNotes(notesCache);
+  } catch(e) {}
+}
+function renderNotes(notes){
+  window._notes = notes;
+  const q = ($('#n-search').value || '').toLowerCase();
+  const list = notes.filter(n => !q || n.title.toLowerCase().includes(q));
+  $('#nlist').innerHTML = list.length ? list.map(n => `
+    <div class="note" data-open="${n.name}">
+      <div class="ttl"><span class="badge">${n.kind === 'paper' ? t('badge_paper') : t('badge_concept')}</span>${escapeHtml(n.title)}</div>
+      <div class="meta">${new Date(n.mtime * 1000).toLocaleDateString(LANG === 'en' ? 'en-US' : 'zh-CN')}</div>
+    </div>`).join('') : `<div class="empty">${t('n_empty')}</div>`;
+  document.querySelectorAll('[data-open]').forEach(el => el.addEventListener('click', () => openNote(el.dataset.open)));
+}
+$('#n-search').addEventListener('input', () => renderNotes(notesCache));
+
+let curNote = null, hlMode = false, curArxiv = null;
+async function openNote(name){
+  const d = await (await fetch('/api/note?name=' + encodeURIComponent(name))).json();
+  curNote = name; curArxiv = d.arxiv || null;
+  const note = notesCache.find(n => n.name === name);
+  $('#r-title').textContent = (note ? note.title : name);
+  $('#note-md').textContent = d.content || '';
+  $('#note-md').style.fontSize = (window._fontSize || 16) + 'px';
+  hlMode = false; $('#btn-hl').classList.remove('on'); $('#btn-hl').textContent = t('r_hl');
+  $('#reader').classList.add('open');
+  if (d.arxiv) { $('#note-body').style.display = 'none'; $('#pdf-wrap').style.display = 'block'; loadPdf(d.arxiv); }
+  else { $('#pdf-wrap').style.display = 'none'; $('#note-body').style.display = 'block'; }
+}
+$('#btn-reader-close').addEventListener('click', () => { $('#reader').classList.remove('open'); $('#pdf-wrap').innerHTML = ''; });
+$('#btn-hl').addEventListener('click', () => {
+  hlMode = !hlMode;
+  $('#btn-hl').classList.toggle('on', hlMode);
+  $('#btn-hl').textContent = hlMode ? t('r_hl_exit') : t('r_hl');
+});
+$('#btn-hl-clear').addEventListener('click', async () => {
+  if (!curArxiv) return;
+  await saveHighlights([]);
+  document.querySelectorAll('#pdf-wrap .hl').forEach(e => e.remove());
+});
+
+async function loadPdf(arxiv){
+  const wrap = $('#pdf-wrap');
+  wrap.innerHTML = `<div class="empty">${t('pdf_loading')}</div>`;
+  let url = null;
+  try { const d = await (await fetch('/api/pdf?id=' + encodeURIComponent(arxiv))).json(); url = d.url; } catch(e) {}
+  if (!url) { wrap.innerHTML = `<div class="empty">${t('pdf_none')}</div>`; $('#note-body').style.display = 'block'; return; }
+  const pdfjs = await import('/vendor/pdf.min.js').catch(() => null);
+  const lib = window.pdfjsLib;
+  if (!lib) { wrap.innerHTML = ''; $('#note-body').style.display = 'block'; return; }
+  lib.GlobalWorkerOptions.workerSrc = '/vendor/pdf.worker.min.js';
+  const pdf = await lib.getDocument(url).promise;
+  wrap.innerHTML = '';
+  const hls = await fetchHighlights(arxiv);
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const vp = page.getViewport({scale: 1.35});
+    const div = document.createElement('div'); div.className = 'pg';
+    div.style.width = vp.width + 'px'; div.style.height = vp.height + 'px';
+    div.dataset.page = p;
+    const canvas = document.createElement('canvas');
+    canvas.width = vp.width; canvas.height = vp.height;
+    div.appendChild(canvas);
+    const txt = document.createElement('div'); txt.className = 'txtlayer';
+    div.appendChild(txt);
+    wrap.appendChild(div);
+    await page.render({canvasContext: canvas.getContext('2d'), viewport: vp}).promise;
+    const tc = await page.getTextContent();
+    lib.renderTextLayer({textContentSource: tc, container: txt, viewport: vp});
+    hls.filter(h => h.page === p).forEach(h => drawHl(div, h));
+  }
+}
+function drawHl(pgDiv, h){
+  const el = document.createElement('div'); el.className = 'hl';
+  el.style.left = (h.x * 100) + '%'; el.style.top = (h.y * 100) + '%';
+  el.style.width = (h.w * 100) + '%'; el.style.height = (h.h * 100) + '%';
+  pgDiv.appendChild(el);
+}
+async function fetchHighlights(arxiv){
+  try { const d = await (await fetch('/api/highlights?id=' + encodeURIComponent(arxiv))).json(); return d.highlights || []; } catch(e) { return []; }
+}
+async function saveHighlights(list){
+  try { await fetch('/api/highlights', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: curArxiv, highlights: list})}); } catch(e) {}
 }
 document.addEventListener('mouseup', async () => {
+  if (!hlMode || !curArxiv) return;
   const sel = window.getSelection();
-  if(!sel || sel.isCollapsed || !curArxiv || !$('reader').classList.contains('on')) return;
+  if (!sel || sel.isCollapsed || !sel.rangeCount) return;
   const range = sel.getRangeAt(0);
-  let node = range.commonAncestorContainer;
-  while(node && !(node.classList && node.classList.contains('page'))) node = node.parentNode;
-  if(!node) return;
-  const pageNum = parseInt(node.dataset.page);
-  const box = node.getBoundingClientRect();
-  const rects = [];
-  for(const r of range.getClientRects()){
-    if(r.width < 2 || r.height < 2) continue;
-    rects.push([(r.left - box.left) / box.width, (r.top - box.top) / box.height, r.width / box.width, r.height / box.height]);
+  const pgDiv = range.commonAncestorContainer.parentElement &&
+                range.commonAncestorContainer.parentElement.closest('.pg');
+  if (!pgDiv) return;
+  const pr = pgDiv.getBoundingClientRect();
+  const out = [];
+  for (const r of range.getClientRects()) {
+    if (r.width < 2 || r.height < 2) continue;
+    out.push({page: parseInt(pgDiv.dataset.page),
+      x: (r.left - pr.left) / pr.width, y: (r.top - pr.top) / pr.height,
+      w: r.width / pr.width, h: r.height / pr.height});
   }
-  if(!rects.length) return;
-  hlData.highlights.push({page: pageNum, text: sel.toString().slice(0, 300), rects, ts: Date.now()});
-  hlData = await jpost('/api/highlights?id=' + encodeURIComponent(curArxiv), hlData);
-  drawHighlights(node, pageNum);
+  if (!out.length) return;
+  const cur = await fetchHighlights(curArxiv);
+  const merged = cur.concat(out);
+  await saveHighlights(merged);
+  out.forEach(h => drawHl(pgDiv, h));
   sel.removeAllRanges();
 });
 
-loadConfig(); loadState(); loadQueue();
-setInterval(() => { loadState(); loadQueue(); }, 20000);
+/* ---------- model + settings ---------- */
+async function refreshModel(){
+  try {
+    const d = await (await fetch('/api/state')).json();
+    const el = $('#m-state'), dot = $('#m-dot');
+    if (d.model && d.model.running) {
+      el.textContent = `${t('m_running')} · ctx ${d.model.ctx} · ${d.model.model.split(/[\\/]/).pop()}`;
+      dot.classList.add('on');
+      $('#m-addr').textContent = d.model.base;
+    } else { el.textContent = t('m_stopped'); dot.classList.remove('on'); }
+  } catch(e) { $('#m-state').textContent = t('m_checking'); }
+}
+$('#btn-mstart').addEventListener('click', async () => { await fetch('/api/model/start', {method:'POST'}); setTimeout(refreshModel, 1500); });
+$('#btn-mstop').addEventListener('click', async () => { await fetch('/api/model/stop', {method:'POST'}); setTimeout(refreshModel, 800); });
+
+async function loadSettings(){
+  const cfg = await (await fetch('/api/config')).json();
+  $('#f-exe').value = cfg.llama_exe || '';
+  $('#f-model').value = cfg.model_path || '';
+  $('#f-port').value = cfg.port || 8080;
+  $('#f-ctx').value = cfg.ctx || 16384;
+  $('#f-schedule').value = cfg.schedule || '23:30';
+  $('#f-schedule2').value = cfg.schedule || '23:30';
+  $('#f-theme').value = cfg.theme || 'light';
+  $('#f-font').value = cfg.font_size || 16;
+  $('#f-lang').value = cfg.lang || 'zh';
+  window._fontSize = cfg.font_size || 16;
+  document.body.classList.toggle('dark', cfg.theme === 'dark');
+  settingsLoaded = true;
+  applyLang(cfg.lang || 'zh');
+}
+function collectSettings(){
+  return {
+    llama_exe: $('#f-exe').value.trim(), model_path: $('#f-model').value.trim(),
+    port: parseInt($('#f-port').value) || 8080, ctx: parseInt($('#f-ctx').value) || 16384,
+    schedule: $('#f-schedule').value || '23:30', theme: $('#f-theme').value,
+    font_size: parseInt($('#f-font').value) || 16, lang: $('#f-lang').value
+  };
+}
+async function saveSettings(flashSel){
+  const data = collectSettings();
+  await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
+  document.body.classList.toggle('dark', data.theme === 'dark');
+  window._fontSize = data.font_size;
+  const f = $(flashSel); f.textContent = t('saved'); setTimeout(() => f.textContent = '', 2000);
+}
+$('#btn-save').addEventListener('click', () => saveSettings('#flash'));
+$('#btn-save-model').addEventListener('click', async () => {
+  $('#f-schedule').value = $('#f-schedule2').value;
+  await saveSettings('#flash2'); refreshModel();
+});
+$('#f-lang').addEventListener('change', () => {
+  applyLang($('#f-lang').value);
+  if (settingsLoaded) saveSettings('#flash');
+});
+$('#f-theme').addEventListener('change', () => document.body.classList.toggle('dark', $('#f-theme').value === 'dark'));
+
+function escapeHtml(s){
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+applyLang('zh');
+loadSettings(); refreshQueue(); refreshNotes(); refreshModel();
+setInterval(() => { refreshModel(); refreshQueue(); }, 20000);
 </script>
-</body></html>
+</body>
+</html>
+
 """
 
 
@@ -1327,10 +1549,10 @@ def run_app(vault: Path, interval: int) -> int:
 
     wa_l, wa_t, wa_r, wa_b = app_shell.work_area()
     wa_w, wa_h = wa_r - wa_l, wa_b - wa_t
-    panel_w = 470
-    panel_h = max(620, min(wa_h - 24, 920))
+    panel_w = 404
+    panel_h = app_shell.AppController.TAB_HEIGHTS["queue"]
     panel_x = wa_r - panel_w - 84          # ball strip stays at the edge
-    panel_y = wa_t + max(0, (wa_h - panel_h) // 2)
+    panel_y = wa_t + 12                    # top-anchored floating card
     hidden_x = wa_r + 8                    # fully off-screen to the right
 
     icon_path = None
@@ -1351,6 +1573,9 @@ def run_app(vault: Path, interval: int) -> int:
 
         def quit_app(self):
             holder["ctl"].quit()
+
+        def set_panel_tab(self, name):
+            holder["ctl"].set_tab(str(name))
 
         def pick_pdf(self):
             try:
@@ -1385,7 +1610,8 @@ def run_app(vault: Path, interval: int) -> int:
     ctl = app_shell.AppController(
         panel, (panel_x, panel_y, hidden_x),
         run_queue_now=_run_queue_now,
-        open_vault=_open_vault if app_shell.WIN else None)
+        open_vault=_open_vault if app_shell.WIN else None,
+        panel_w=panel_w, max_h=wa_h - 24)
     holder["ctl"] = ctl
 
     def _on_closing():
@@ -1404,8 +1630,9 @@ def run_app(vault: Path, interval: int) -> int:
     # Floating ball: native layered window on Windows; the old
     # pywebview ball remains as a dev fallback elsewhere.
     if app_shell.WIN:
-        ball_x = int(cfg.get("ball_x") or (wa_r - app_shell.BALL_SIZE - 8))
-        ball_y = int(cfg.get("ball_y") or (wa_t + (wa_h - app_shell.BALL_SIZE) // 2))
+        ball_ps = app_shell.ball_pixel_size()
+        ball_x = int(cfg.get("ball_x") or (wa_r - ball_ps - 8))
+        ball_y = int(cfg.get("ball_y") or (wa_t + (wa_h - ball_ps) // 2))
 
         def _ball_moved(x, y):
             fresh = load_config(vault)
@@ -1421,7 +1648,7 @@ def run_app(vault: Path, interval: int) -> int:
             x=max(0, wa_r - 76), y=max(0, wa_t + wa_h // 2 - 34),
             frameless=True, on_top=True)
 
-    ctl.tray = app_shell.build_tray(ctl, icon_path)
+    ctl.tray = app_shell.build_tray(ctl, icon_path, str(cfg.get("lang", "zh")))
     wake = app_shell.start_wake_listener(ctl.show_panel)
     try:
         webview.start(func=ctl.run, icon=icon_path)

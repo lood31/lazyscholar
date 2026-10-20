@@ -33,8 +33,28 @@ WAKE_MAGIC = b"lazyscholar:show"
 MUTEX_NAME = r"Local\LazyScholar-SingleInstance-7F3A"
 ERROR_ALREADY_EXISTS = 183
 
-BALL_SIZE = 72          # logical px of the ball window
-BALL_RENDER = 160       # px the ball artwork is rendered at (supersampled)
+BALL_SIZE = 60          # logical px of the ball; physical size scales with DPI
+BALL_RENDER = 160       # px for standalone artwork renders (tray fallback)
+
+
+def ball_pixel_size() -> int:
+    """Physical pixel size for the ball window on this display.
+    The artwork is rendered at exactly this size and the layered
+    window is created at exactly this size: UpdateLayeredWindow maps
+    the source bitmap 1:1, so any mismatch between the two crops the
+    picture (the v4.0 bug: 160px art in a 72px window showed only the
+    top-left corner of the ball)."""
+    if not WIN:
+        return BALL_SIZE
+    pct = 100
+    try:
+        pct = int(ctypes.windll.shcore.GetScaleFactorForDevice(0)) or 100
+    except Exception:
+        try:
+            pct = round(ctypes.windll.user32.GetDpiForSystem() / 96 * 100)
+        except Exception:
+            pct = 100
+    return max(48, min(168, round(BALL_SIZE * pct / 100)))
 
 
 # ----------------------------------------------------------------------
@@ -282,6 +302,7 @@ class BallWindow:
     def __init__(self, controller, x: int, y: int, on_moved=None):
         self.controller = controller
         self.x, self.y = x, y
+        self.size = ball_pixel_size()
         self.on_moved = on_moved
         self.hwnd = None
         self._thread: threading.Thread | None = None
@@ -315,7 +336,7 @@ class BallWindow:
         hwnd = user32.CreateWindowExW(
             _WS_EX_LAYERED | _WS_EX_TOPMOST | _WS_EX_TOOLWINDOW,
             cls_name, None, _WS_POPUP,
-            self.x, self.y, BALL_SIZE, BALL_SIZE, None, None, hinst, None)
+            self.x, self.y, self.size, self.size, None, None, hinst, None)
         if not hwnd:
             return
         self.hwnd = hwnd
@@ -327,7 +348,7 @@ class BallWindow:
             user32.DispatchMessageW(ctypes.byref(msg))
 
     def _paint(self, hwnd) -> None:
-        img = render_ball_image()
+        img = render_ball_image(self.size)
         px = img.width
         data = _premultiplied_bgra(img)
         user32, gdi32 = _user32, _gdi32
@@ -343,7 +364,7 @@ class BallWindow:
         ctypes.memmove(bits, data, len(data))
         old = gdi32.SelectObject(mem_dc, hbmp)
         pt = wintypes.POINT(self.x, self.y)
-        size = wintypes.SIZE(BALL_SIZE, BALL_SIZE)
+        size = wintypes.SIZE(self.size, self.size)
         src = wintypes.POINT(0, 0)
         blend = _BLENDFUNCTION(_AC_SRC_OVER, 0, 255, _AC_SRC_ALPHA)
         user32.UpdateLayeredWindow(hwnd, screen_dc, ctypes.byref(pt),
@@ -431,7 +452,15 @@ def apply_rounded_corners(window) -> None:
 # ----------------------------------------------------------------------
 # tray
 # ----------------------------------------------------------------------
-def build_tray(controller, icon_path: str | None):
+_TRAY_STR = {
+    "zh": {"open": "打开面板", "run": "立即处理队列", "vault": "打开知识库文件夹",
+           "quit": "退出 LazyScholar", "title": "LazyScholar 懒人学者"},
+    "en": {"open": "Open panel", "run": "Process queue now", "vault": "Open vault folder",
+           "quit": "Quit LazyScholar", "title": "LazyScholar"},
+}
+
+
+def build_tray(controller, icon_path: str | None, lang: str = "zh"):
     """Create the pystray icon and detach it. Returns the Icon or
     None when pystray is unavailable (the app still works: the ball
     carries show/quit on its own)."""
@@ -448,15 +477,16 @@ def build_tray(controller, icon_path: str | None):
             image = Image.open(icon_path)
         if image is None:
             image = render_ball_image(128)
+        s = _TRAY_STR.get(lang, _TRAY_STR["zh"])
         menu = pystray.Menu(
-            pystray.MenuItem("打开面板", lambda icon, item: controller.toggle_panel(),
+            pystray.MenuItem(s["open"], lambda icon, item: controller.toggle_panel(),
                              default=True),
-            pystray.MenuItem("立即处理队列", lambda icon, item: controller.run_queue_now()),
-            pystray.MenuItem("打开知识库文件夹", lambda icon, item: controller.open_vault()),
+            pystray.MenuItem(s["run"], lambda icon, item: controller.run_queue_now()),
+            pystray.MenuItem(s["vault"], lambda icon, item: controller.open_vault()),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("退出 LazyScholar", lambda icon, item: controller.quit()),
+            pystray.MenuItem(s["quit"], lambda icon, item: controller.quit()),
         )
-        icon = pystray.Icon("lazyscholar", image, "LazyScholar 懒人学者", menu)
+        icon = pystray.Icon("lazyscholar", image, s["title"], menu)
         icon.run_detached()
         return icon
     except Exception:
@@ -474,16 +504,25 @@ class AppController:
     thread is the one pywebview gives to webview.start(func=...).
     """
 
+    # Panel height per tab: the panel hugs its content instead of
+    # always occupying the full screen height (v4.0 complaint: a huge
+    # slab of empty space under a short queue form).
+    TAB_HEIGHTS = {"queue": 508, "notes": 780, "model": 566, "settings": 596}
+
     def __init__(self, panel, panel_geo: tuple[int, int, int],
-                 run_queue_now=None, open_vault=None):
+                 run_queue_now=None, open_vault=None,
+                 panel_w: int = 404, max_h: int = 900):
         self.panel = panel
         self.panel_x, self.panel_y, self.hidden_x = panel_geo
+        self.panel_w = panel_w
+        self.max_h = max_h
         self._run_queue_now = run_queue_now
         self._open_vault = open_vault
         self.tray: Any = None
         self.ball: BallWindow | None = None
         self.q: "queue.Queue[str]" = _make_queue()
         self.panel_visible = False
+        self._tab = "queue"
         self._gen = 0  # animation generation: stale animators self-abort
         self.quitting = False
 
@@ -496,6 +535,9 @@ class AppController:
 
     def hide_panel(self) -> None:
         self.q.put("hide")
+
+    def set_tab(self, name: str) -> None:
+        self.q.put(f"tab:{name}")
 
     def run_queue_now(self) -> None:
         self.q.put("run_now")
@@ -522,6 +564,8 @@ class AppController:
                     self._set_panel(True)
                 elif cmd == "hide":
                     self._set_panel(False)
+                elif cmd.startswith("tab:"):
+                    self._apply_tab_height(cmd[4:])
                 elif cmd == "run_now" and self._run_queue_now:
                     threading.Thread(target=self._run_queue_now,
                                      daemon=True, name="queue-run").start()
@@ -529,6 +573,14 @@ class AppController:
                     self._open_vault()
             except Exception:
                 pass  # a failed window op must never kill the loop
+
+    def _apply_tab_height(self, name: str) -> None:
+        self._tab = name
+        if self.panel is None:
+            return
+        h = self.TAB_HEIGHTS.get(name)
+        if h:
+            self.panel.resize(self.panel_w, min(h, self.max_h))
 
     # -- panel show/hide with slide animation --------------------------
     def _set_panel(self, visible: bool) -> None:
@@ -539,6 +591,8 @@ class AppController:
         gen = self._gen
         win = self.panel
         if visible:
+            h = self.TAB_HEIGHTS.get(self._tab, 508)
+            win.resize(self.panel_w, min(h, self.max_h))
             win.move(self.hidden_x, self.panel_y)
             win.show()
             apply_rounded_corners(win)
