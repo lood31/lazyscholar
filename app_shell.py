@@ -17,12 +17,14 @@ Windows-only pieces degrade to no-ops elsewhere (dev / headless use).
 from __future__ import annotations
 
 import ctypes
+import queue
 import socket
 import sys
 import threading
 import time
 from ctypes import wintypes
 from pathlib import Path
+from typing import Any
 
 WIN = sys.platform == "win32"
 
@@ -188,11 +190,14 @@ if WIN:
     _gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
     _kernel32w = ctypes.WinDLL("kernel32", use_last_error=True)
 
+    # ctypes.wintypes has no HCURSOR on CPython; it is just a HANDLE-sized pointer.
+    _HCURSOR = getattr(wintypes, "HCURSOR", None) or wintypes.HANDLE
+
     class _WNDCLASSW(ctypes.Structure):
         _fields_ = [("style", wintypes.UINT), ("lpfnWndProc", ctypes.c_void_p),
                     ("cbClsExtra", ctypes.c_int), ("cbWndExtra", ctypes.c_int),
                     ("hInstance", wintypes.HINSTANCE), ("hIcon", wintypes.HICON),
-                    ("hCursor", wintypes.HCURSOR), ("hbrBackground", wintypes.HBRUSH),
+                    ("hCursor", _HCURSOR), ("hbrBackground", wintypes.HBRUSH),
                     ("lpszMenuName", wintypes.LPCWSTR), ("lpszClassName", wintypes.LPCWSTR)]
 
     class _BITMAPINFOHEADER(ctypes.Structure):
@@ -217,6 +222,55 @@ if WIN:
     class _BLENDFUNCTION(ctypes.Structure):
         _fields_ = [("BlendOp", ctypes.c_byte), ("BlendFlags", ctypes.c_byte),
                     ("SourceConstantAlpha", ctypes.c_byte), ("AlphaFormat", ctypes.c_byte)]
+
+    # Without explicit argtypes ctypes marshals lparam/wparam as C int and a
+    # 64-bit value such as WM_MOUSEMOVE's lparam raises OverflowError inside
+    # the wndproc callback, breaking the ball window's message handling.
+    _LRESULT = ctypes.c_ssize_t
+    _user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT,
+                                       wintypes.WPARAM, wintypes.LPARAM]
+    _user32.DefWindowProcW.restype = _LRESULT
+    _user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT,
+                                     wintypes.WPARAM, wintypes.LPARAM]
+    _user32.SendMessageW.restype = _LRESULT
+    _user32.CreateWindowExW.restype = wintypes.HWND
+    _user32.GetDC.restype = wintypes.HDC
+    _user32.GetDC.argtypes = [wintypes.HWND]
+    _user32.ReleaseDC.argtypes = [wintypes.HWND, wintypes.HDC]
+    _gdi32.CreateCompatibleDC.restype = wintypes.HDC
+    _gdi32.CreateCompatibleDC.argtypes = [wintypes.HDC]
+    _gdi32.CreateDIBSection.restype = wintypes.HANDLE
+    _gdi32.SelectObject.restype = wintypes.HANDLE
+    _gdi32.DeleteObject.argtypes = [wintypes.HANDLE]
+    _gdi32.DeleteDC.argtypes = [wintypes.HDC]
+
+    # The remaining calls in the ball path pass 64-bit handles (HDC/HBITMAP),
+    # which ctypes truncates to C int unless argtypes are declared.
+    _gdi32.CreateDIBSection.argtypes = [wintypes.HDC, ctypes.c_void_p, wintypes.UINT,
+                                        ctypes.POINTER(ctypes.c_void_p),
+                                        wintypes.HANDLE, wintypes.DWORD]
+    _gdi32.SelectObject.argtypes = [wintypes.HDC, wintypes.HANDLE]
+    _user32.UpdateLayeredWindow.argtypes = [
+        wintypes.HWND, wintypes.HDC, ctypes.POINTER(wintypes.POINT),
+        ctypes.POINTER(wintypes.SIZE), wintypes.HDC, ctypes.POINTER(wintypes.POINT),
+        wintypes.DWORD, ctypes.POINTER(_BLENDFUNCTION), wintypes.DWORD]
+    _user32.UpdateLayeredWindow.restype = wintypes.BOOL
+    _user32.RegisterClassW.restype = wintypes.ATOM
+    _user32.CreateWindowExW.argtypes = [
+        wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD,
+        ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+        wintypes.HWND, wintypes.HMENU, wintypes.HINSTANCE, ctypes.c_void_p]
+    _user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT,
+                                       wintypes.WPARAM, wintypes.LPARAM]
+    _user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND,
+                                     ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                     ctypes.c_int, wintypes.UINT]
+    _user32.SetWindowPos.restype = wintypes.BOOL
+    _user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT,
+                                     wintypes.WPARAM, wintypes.LPARAM]
+    _user32.PostMessageW.restype = wintypes.BOOL
+    _user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT,
+                                     wintypes.WPARAM, wintypes.LPARAM]
 
 
 class BallWindow:
@@ -426,7 +480,7 @@ class AppController:
         self.panel_x, self.panel_y, self.hidden_x = panel_geo
         self._run_queue_now = run_queue_now
         self._open_vault = open_vault
-        self.tray = None
+        self.tray: Any = None
         self.ball: BallWindow | None = None
         self.q: "queue.Queue[str]" = _make_queue()
         self.panel_visible = False

@@ -1,3 +1,13 @@
 __pycache__/
 *.log
 .DS_Store
+
+# PyInstaller output
+build/
+dist/
+*.spec
+
+# release artifacts
+LazyScholar-Windows.zip
+deploy-result.txt
+icon-preview.png

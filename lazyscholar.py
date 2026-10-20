@@ -105,7 +105,7 @@ def fetch_arxiv(arxiv_id: str, attempts: int = 3) -> dict:
             last_exc = e
             if i < attempts - 1:
                 time.sleep(8 + 7 * i)  # 8s, then 15s
-    raise last_exc
+    raise last_exc or RuntimeError('arxiv fetch failed')
 
 
 def llm_chat(system: str, user: str, max_tokens: int = 1400) -> str:
@@ -616,7 +616,7 @@ def llama_health(port: int) -> bool:
         return False
 
 
-_server = {"proc": None}
+_server: dict[str, "subprocess.Popen[bytes] | None"] = {"proc": None}
 
 
 def start_server(vault: Path, cfg: dict) -> bool:
@@ -774,7 +774,7 @@ def get_pdf_path(vault: Path, arxiv_id: str) -> Path:
 def _vendor_dir() -> Path:
     cands = []
     if getattr(sys, "_MEIPASS", None):
-        cands.append(Path(sys._MEIPASS) / "vendor")
+        cands.append(Path(getattr(sys, "_MEIPASS", "")) / "vendor")
     cands.append(Path(__file__).resolve().parent / "vendor")
     for c in cands:
         if c.exists():
@@ -1117,7 +1117,7 @@ def serve_ui(vault: Path, open_browser: bool = False) -> None:
     ball_page = BALL_PAGE.encode("utf-8")
 
     class Handler(BaseHTTPRequestHandler):
-        def log_message(self, *args):  # keep the console clean
+        def log_message(self, format, *args):  # keep the console clean
             pass
 
         def _send(self, code: int, body: bytes, ctype: str) -> None:
@@ -1436,10 +1436,23 @@ def run_app(vault: Path, interval: int) -> int:
     return 0
 
 
+def _default_vault() -> str:
+    """Vault used when --vault is not given. Explorer launches have no
+    arguments, so fall back to the machine's working vault instead of
+    silently creating a second one under the user profile."""
+    env = os.environ.get("LAZYSCHOLAR_VAULT")
+    if env:
+        return env
+    shared = Path("D:/LazyScholarVault")
+    if shared.exists():
+        return str(shared)
+    return str(Path.home() / "LazyScholarVault")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="LazyScholar unattended knowledge butler")
-    ap.add_argument("--vault", default=str(Path.home() / "LazyScholarVault"),
-                    help="Obsidian vault path (default: ~/LazyScholarVault)")
+    ap.add_argument("--vault", default=_default_vault(),
+                    help="Obsidian vault path (default: shared vault, else ~/LazyScholarVault)")
     ap.add_argument("--once", action="store_true", help="single poll cycle, then exit (for tests)")
     ap.add_argument("--interval", type=int, default=30, help="poll interval seconds (default 30)")
     ap.add_argument("--ui", action="store_true",
@@ -1451,7 +1464,12 @@ def main() -> int:
                     help="open the web app in a browser on start")
     args = ap.parse_args()
     vault = Path(args.vault).expanduser()
-    if args.app:
+    # A packaged exe started from Explorer gets no arguments; open the
+    # desktop shell instead of silently running as a headless daemon
+    # (which looked like "double-clicking the exe does nothing").
+    bare_launch = bool(getattr(sys, "frozen", False)) and not (
+        args.ui or args.once or args.no_ui or args.open_ui)
+    if args.app or bare_launch:
         return run_app(vault, args.interval)
     if args.ui:
         _ensure_vault(vault)
