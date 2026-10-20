@@ -33,7 +33,7 @@ Built for DEV Hacktoberfest 2026, Week 3 ("Slow and Steady"). Skeleton (polling,
 ## Quick start
 
 ```bash
-llama-server -m /path/to/gemma-3-4b-it-Q4_K_M.gguf -c 16384   # keep running
+llama serve -m /path/to/gemma-3-4b-it-Q4_K_M.gguf -c 16384   # keep running
 python lazyscholar.py --vault /path/to/your/vault   # add --once for a single pass
 ```
 
