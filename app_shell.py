@@ -38,16 +38,13 @@ BALL_RENDER = 160       # px for standalone artwork renders (tray fallback)
 
 
 def ball_window_size() -> tuple[int, int]:
-    """Physical (width, height) of the ball window. The ball is a
-    composite (user's 2026-10-21 ruling, DESIGN.md §1): from the
-    screen edge inward - first a slim vertical dock bar flush with
-    the right edge (the 'square'), then the circle overlapping it,
-    with the app icon inside the circle. The window is therefore
-    wider and much taller than the circle it carries."""
+    """Physical (width, height) of the ball window: a square canvas
+    for a single frosted-glass circle (DESIGN.md §1, corrected
+    2026-10-21 - there is NO dock bar: the dark vertical line in the
+    user's reference photo was his page's own scrollbar, not a
+    design element)."""
     d = ball_pixel_size()
-    bar_w = max(6, int(d * 0.12))
-    overlap = max(4, int(d * 0.10))
-    return d + bar_w - overlap, int(d * 3.0)
+    return d, d
 
 
 def ball_pixel_size() -> int:
@@ -194,54 +191,55 @@ def _app_icon_image():
 
 
 def render_ball_image(px: int = BALL_RENDER):
-    """Render the ball artwork for a circle of diameter px, as the
-    composite docked form (DESIGN.md §1): a slim structural-blue
-    dock bar flush with the image's right edge (the 'square'), a
-    white circle overlapping it (the 'round'), and the app icon
-    centred inside the circle. Soft shadows are baked in so the
-    group floats over the desktop. When no icon file is reachable
-    the circle falls back to a blue disc with a white book glyph -
-    the sloth artwork is retired everywhere."""
+    """Render the ball: a single frosted-glass circle (DESIGN.md §1,
+    corrected 2026-10-21) with the app icon as a circular badge
+    inside it. The frost is baked into the artwork - a milky,
+    semi-transparent disc with a bright rim and a soft top light -
+    because a per-pixel-alpha layered window has no live backdrop
+    blur; over a real desktop it reads as frosted glass. When no
+    icon file is reachable the badge falls back to a blue disc with
+    a white book glyph - the sloth artwork is retired everywhere."""
     from PIL import Image, ImageDraw, ImageFilter
     d = px
-    bar_w = max(6, int(d * 0.12))
-    overlap = max(4, int(d * 0.10))
-    W = d + bar_w - overlap
-    H = int(d * 3.0)
-    cx, cy = d // 2, H // 2
-    r = int(d * 0.47)
-    bar_x = W - bar_w
-    bar_pad = int(d * 0.10)
+    W = H = d
+    cx, cy = d // 2, d // 2
+    r = int(d * 0.44)
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    # soft shadows under both parts
+    # soft shadow under the disc
     shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     ds = ImageDraw.Draw(shadow)
-    ds.rounded_rectangle([bar_x, bar_pad + 4, W, H - bar_pad + 4],
-                         radius=bar_w // 2, fill=(10, 14, 26, 70))
     ds.ellipse([cx - r, cy - r + 4, cx + r, cy + r + 4], fill=(10, 14, 26, 120))
     shadow = shadow.filter(ImageFilter.GaussianBlur(max(1.5, d * 0.045)))
     img.alpha_composite(shadow)
     dr = ImageDraw.Draw(img)
-    # the dock bar (square), structural blue, flush right
-    dr.rounded_rectangle([bar_x, bar_pad, W, H - bar_pad],
-                         radius=bar_w // 2, fill=(51, 80, 126, 255))
-    # the circle (round), white with a hairline edge
-    dr.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(255, 255, 255, 255),
-               outline=(228, 232, 239, 255), width=max(1, d // 60))
+    # frosted disc: milky translucent white with a bright hairline
+    # rim; the soft light cap is composited through the disc's own
+    # mask (ImageDraw would otherwise overwrite the alpha, not blend)
+    dr.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(252, 253, 255, 196),
+               outline=(255, 255, 255, 235), width=max(1, d // 60))
+    cap = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ImageDraw.Draw(cap).ellipse([cx - r, cy - r, cx + r, cy - int(r * 0.15)],
+                                fill=(255, 255, 255, 50))
+    disc_mask = Image.new("L", (W, H), 0)
+    ImageDraw.Draw(disc_mask).ellipse([cx - r, cy - r, cx + r, cy + r], fill=255)
+    cap.putalpha(Image.composite(cap.split()[3], Image.new("L", (W, H), 0),
+                                 disc_mask))
+    img.alpha_composite(cap)
     # the app icon inside the circle, itself rendered round: the
     # icon artwork clipped to a circular badge centred in the disc
     # (user's 2026-10-21 detail ruling - copy his reference exactly,
     # only the glyph is swapped for our icon, in circular form)
     icon = _app_icon_image()
     if icon is not None:
-        side = int(d * 0.72)
+        side = int(d * 0.63)
         badge = icon.resize((side, side), Image.LANCZOS)
         mask = Image.new("L", (side, side), 0)
         ImageDraw.Draw(mask).ellipse([0, 0, side, side], fill=255)
         badge.putalpha(mask)
         img.alpha_composite(badge, (cx - side // 2, cy - side // 2))
     else:
-        dr.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(51, 80, 126, 255))
+        br = int(d * 0.315)
+        dr.ellipse([cx - br, cy - br, cx + br, cy + br], fill=(51, 80, 126, 255))
         try:
             from PIL import ImageFont
             font = None
