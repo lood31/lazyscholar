@@ -1512,10 +1512,13 @@ def run_app(vault: Path, interval: int) -> int:
     """Packaged-app mode (v4): butler + scheduler + web UI in threads;
     the desktop shell lives in app_shell.py - a native layered-window
     ball (truly transparent), a pystray tray icon that owns exit, a
-    single-instance mutex with wake-up, and the main panel as a
-    floating card (DWM rounded corners, native shadow, gap from the
-    screen edge, slide-in animation) driven by an AppController
-    command queue. Falls back to headless if pywebview is missing."""
+    single-instance mutex with wake-up, and the main panel docked
+    flush to the right edge of the desktop (v4.2: fixed position,
+    appears instantly with no slide animation; the ball - which
+    itself only slides up and down that same edge and wears the app
+    icon - hides while the panel is open), driven by an
+    AppController command queue. Falls back to headless if
+    pywebview is missing."""
     _ensure_vault(vault)
     log(vault, f"START app mode vault={vault}")
     cfg = load_config(vault)
@@ -1551,9 +1554,8 @@ def run_app(vault: Path, interval: int) -> int:
     wa_w, wa_h = wa_r - wa_l, wa_b - wa_t
     panel_w = 404
     panel_h = app_shell.AppController.TAB_HEIGHTS["queue"]
-    panel_x = wa_r - panel_w - 84          # ball strip stays at the edge
-    panel_y = wa_t + 12                    # top-anchored floating card
-    hidden_x = wa_r + 8                    # fully off-screen to the right
+    panel_x = wa_r - panel_w               # v4.2: flush to the right edge
+    panel_y = wa_t + 12                    # top-anchored
 
     icon_path = None
     for cand in (Path(getattr(sys, "_MEIPASS", "")) / "lazyscholar.ico",
@@ -1608,7 +1610,7 @@ def run_app(vault: Path, interval: int) -> int:
             pass
 
     ctl = app_shell.AppController(
-        panel, (panel_x, panel_y, hidden_x),
+        panel, (panel_x, panel_y),
         run_queue_now=_run_queue_now,
         open_vault=_open_vault if app_shell.WIN else None,
         panel_w=panel_w, max_h=wa_h - 24)
@@ -1631,12 +1633,15 @@ def run_app(vault: Path, interval: int) -> int:
     # pywebview ball remains as a dev fallback elsewhere.
     if app_shell.WIN:
         ball_ps = app_shell.ball_pixel_size()
-        ball_x = int(cfg.get("ball_x") or (wa_r - ball_ps - 8))
+        ball_x = wa_r - ball_ps            # v4.2: docked to the right edge
         ball_y = int(cfg.get("ball_y") or (wa_t + (wa_h - ball_ps) // 2))
+        ball_y = max(wa_t, min(ball_y, wa_b - ball_ps))  # stay on the edge
 
         def _ball_moved(x, y):
+            # only the height along the edge is worth remembering
             fresh = load_config(vault)
-            fresh["ball_x"], fresh["ball_y"] = x, y
+            fresh["ball_y"] = y
+            fresh.pop("ball_x", None)
             save_config(vault, fresh)
 
         ctl.ball = app_shell.BallWindow(ctl, ball_x, ball_y, on_moved=_ball_moved)

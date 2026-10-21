@@ -20,6 +20,7 @@ Note 'old processes stopped'
 # 2. Sync the vault copy (script + shell layer + pdf.js vendor)
 Copy-Item 'D:\lazyscholar\lazyscholar.py' 'D:\LazyScholarVault\lazyscholar.py' -Force
 Copy-Item 'D:\lazyscholar\app_shell.py' 'D:\LazyScholarVault\app_shell.py' -Force
+Copy-Item 'D:\lazyscholar\lazyscholar.ico' 'D:\LazyScholarVault\lazyscholar.ico' -Force
 Copy-Item 'D:\lazyscholar\vendor' 'D:\LazyScholarVault\vendor' -Recurse -Force
 Note 'vault synced'
 

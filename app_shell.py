@@ -8,7 +8,7 @@ Owns everything that is *window chrome*, not business logic:
   window painted with UpdateLayeredWindow is the standard fix.
 - the system tray (pystray, run_detached so pywebview keeps the
   main thread)
-- the panel's slide animation and DWM rounded corners
+- the panel's right-edge docking and DWM rounded corners
 - AppController: a command queue that tray / ball / JS bridge /
   wake listener all post to, so no component calls another directly.
 
@@ -152,10 +152,62 @@ def _load_glyph_font(px: int):
     return _F.load_default(), "懒", False
 
 
+def _app_icon_image():
+    """The app icon (lazyscholar.ico) as an RGBA image at its largest
+    embedded size, or None when no icon file is reachable. Search
+    order: the PyInstaller bundle, the module's own folder, the cwd."""
+    from PIL import Image
+    here = Path(__file__).resolve().parent
+    cands = []
+    meipass = getattr(sys, "_MEIPASS", "")
+    if meipass:
+        cands.append(Path(meipass) / "lazyscholar.ico")
+    cands.append(here / "lazyscholar.ico")
+    cands.append(Path.cwd() / "lazyscholar.ico")
+    for cand in cands:
+        try:
+            if cand.exists():
+                img = Image.open(cand)
+                try:
+                    sizes = img.ico.sizes()
+                    if sizes:
+                        img.size = max(sizes)
+                except Exception:
+                    pass
+                return img.convert("RGBA")
+        except Exception:
+            continue
+    return None
+
+
 def render_ball_image(px: int = BALL_RENDER):
-    """Render the ball as an RGBA image: copper disc, soft drop
-    shadow baked in, glyph centred. Drawn at 2x and let the OS scale
-    it into the window so it stays crisp on high-DPI screens."""
+    """Render the ball at exactly px x px: the app icon itself
+    (v4.2 - the user asked for the app icon instead of the sloth
+    artwork), with a soft silhouette shadow baked underneath so it
+    floats over the desktop. Falls back to the copper-disc render
+    when no icon is reachable, so the ball never comes up blank."""
+    from PIL import Image, ImageFilter
+    icon = _app_icon_image()
+    if icon is None:
+        return _render_disc_ball(px)
+    img = Image.new("RGBA", (px, px), (0, 0, 0, 0))
+    inset = max(2, int(px * 0.05))
+    side = px - 2 * inset
+    art = icon.resize((side, side), Image.LANCZOS)
+    # shadow: the icon's own silhouette, darkened, blurred, nudged down
+    dark = Image.new("RGBA", (side, side), (8, 10, 20, 150))
+    dark.putalpha(art.split()[3])
+    shadow = Image.new("RGBA", (px, px), (0, 0, 0, 0))
+    shadow.alpha_composite(dark, (inset, inset + max(2, int(px * 0.05))))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(max(1.5, px * 0.04)))
+    img.alpha_composite(shadow)
+    img.alpha_composite(art, (inset, inset))
+    return img
+
+
+def _render_disc_ball(px: int):
+    """v4.0 artwork, kept only as the no-icon fallback: copper disc,
+    soft drop shadow, sloth/CJK glyph centred."""
     from PIL import Image, ImageDraw, ImageFilter
 
     img = Image.new("RGBA", (px, px), (0, 0, 0, 0))
@@ -238,6 +290,7 @@ if WIN:
     _WM_DESTROY, _WM_CLOSE = 0x0002, 0x0010
     _WM_LBUTTONDOWN, _WM_LBUTTONUP, _WM_RBUTTONUP, _WM_MOUSEMOVE = 0x0201, 0x0202, 0x0205, 0x0200
     _ULW_ALPHA, _AC_SRC_OVER, _AC_SRC_ALPHA = 2, 0, 1
+    _WM_BALL_SHOW, _WM_BALL_HIDE = 0x8000 + 41, 0x8000 + 42  # WM_APP range
 
     class _BLENDFUNCTION(ctypes.Structure):
         _fields_ = [("BlendOp", ctypes.c_byte), ("BlendFlags", ctypes.c_byte),
@@ -295,9 +348,11 @@ if WIN:
 
 class BallWindow:
     """The floating ball as a native layered window on its own
-    message-loop thread. Click -> controller.toggle_panel();
-    drag -> moves (new position reported via on_moved);
-    right-click -> controller.quit(). No-op shell off Windows."""
+    message-loop thread. It lives docked to the right edge of the
+    work area: drags slide it along that edge only (v4.2). Click ->
+    controller.toggle_panel(); the controller hides the ball while
+    the panel is open. Right-click -> controller.quit().
+    No-op shell off Windows."""
 
     def __init__(self, controller, x: int, y: int, on_moved=None):
         self.controller = controller
@@ -321,6 +376,15 @@ class BallWindow:
     def close(self) -> None:
         if WIN and self.hwnd:
             _user32.PostMessageW(self.hwnd, _WM_CLOSE, 0, 0)
+
+    def set_visible(self, visible: bool) -> None:
+        """Thread-safe show/hide, posted to the ball's own message
+        loop: the ball disappears while the panel is open and comes
+        back when it closes (v4.2)."""
+        if WIN and self.hwnd:
+            _user32.PostMessageW(self.hwnd,
+                                 _WM_BALL_SHOW if visible else _WM_BALL_HIDE,
+                                 0, 0)
 
     # -- internals (ball thread only) ---------------------------------
     def _run(self) -> None:
@@ -393,7 +457,9 @@ class BallWindow:
             if abs(dx) + abs(dy) > 6:
                 self._dragging = True
             if self._dragging:
-                user32.SetWindowPos(hwnd, None, wx + dx, wy + dy, 0, 0, 0x0001)
+                # v4.2: the ball is docked to the right edge - a drag
+                # slides it along that edge, never away from it.
+                user32.SetWindowPos(hwnd, None, self.x, wy + dy, 0, 0, 0x0001)
             return 0
         if msg == _WM_LBUTTONUP:
             was_drag = self._dragging
@@ -401,14 +467,20 @@ class BallWindow:
             if was_drag:
                 rect = wintypes.RECT()
                 user32.GetWindowRect(hwnd, ctypes.byref(rect))
-                self.x, self.y = rect.left, rect.top
+                self.y = rect.top  # x stays docked to the right edge
                 if self.on_moved:
-                    self.on_moved(rect.left, rect.top)
+                    self.on_moved(self.x, rect.top)
             else:
                 self.controller.toggle_panel()
             return 0
         if msg == _WM_RBUTTONUP:
             self.controller.quit()
+            return 0
+        if msg == _WM_BALL_SHOW:
+            user32.ShowWindow(hwnd, 5)  # SW_SHOW
+            return 0
+        if msg == _WM_BALL_HIDE:
+            user32.ShowWindow(hwnd, 0)  # SW_HIDE
             return 0
         if msg == _WM_CLOSE:
             user32.DestroyWindow(hwnd)
@@ -509,11 +581,11 @@ class AppController:
     # slab of empty space under a short queue form).
     TAB_HEIGHTS = {"queue": 508, "notes": 780, "model": 566, "settings": 596}
 
-    def __init__(self, panel, panel_geo: tuple[int, int, int],
+    def __init__(self, panel, panel_pos: tuple[int, int],
                  run_queue_now=None, open_vault=None,
                  panel_w: int = 404, max_h: int = 900):
         self.panel = panel
-        self.panel_x, self.panel_y, self.hidden_x = panel_geo
+        self.panel_x, self.panel_y = panel_pos
         self.panel_w = panel_w
         self.max_h = max_h
         self._run_queue_now = run_queue_now
@@ -523,7 +595,6 @@ class AppController:
         self.q: "queue.Queue[str]" = _make_queue()
         self.panel_visible = False
         self._tab = "queue"
-        self._gen = 0  # animation generation: stale animators self-abort
         self.quitting = False
 
     # -- thread-safe command posts ------------------------------------
@@ -582,40 +653,31 @@ class AppController:
         if h:
             self.panel.resize(self.panel_w, min(h, self.max_h))
 
-    # -- panel show/hide with slide animation --------------------------
+    # -- panel show/hide ------------------------------------------------
     def _set_panel(self, visible: bool) -> None:
+        """v4.2: no slide animation - the panel simply appears,
+        docked flush to the right edge of the work area at a fixed
+        position it cannot be dragged from. Ball and panel are never
+        on screen together: opening the panel hides the ball, and
+        closing the panel brings the ball back."""
         if self.panel is None or visible == self.panel_visible:
             return
         self.panel_visible = visible
-        self._gen += 1
-        gen = self._gen
         win = self.panel
         if visible:
             h = self.TAB_HEIGHTS.get(self._tab, 508)
             win.resize(self.panel_w, min(h, self.max_h))
-            win.move(self.hidden_x, self.panel_y)
+            win.move(self.panel_x, self.panel_y)
             win.show()
             apply_rounded_corners(win)
-            self._slide(win, self.hidden_x, self.panel_x, gen)
         else:
-            self._slide(win, self.panel_x, self.hidden_x, gen)
-            if gen == self._gen:
-                win.hide()
-
-    def _slide(self, win, x_from: int, x_to: int, gen: int, dur: float = 0.18) -> None:
-        steps = max(8, int(dur / 0.016))
-        for i in range(1, steps + 1):
-            if gen != self._gen or self.quitting:
-                return
-            t = i / steps
-            ease = 1 - (1 - t) ** 3
-            win.move(int(x_from + (x_to - x_from) * ease), self.panel_y)
-            time.sleep(0.016)
+            win.hide()
+        if self.ball is not None:
+            self.ball.set_visible(not visible)
 
     # -- exit -----------------------------------------------------------
     def _do_quit(self) -> None:
         self.quitting = True
-        self._gen += 1
         try:
             if self.tray is not None:
                 self.tray.stop()
