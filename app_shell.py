@@ -228,12 +228,18 @@ def render_ball_image(px: int = BALL_RENDER):
     # the circle (round), white with a hairline edge
     dr.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(255, 255, 255, 255),
                outline=(228, 232, 239, 255), width=max(1, d // 60))
-    # the app icon inside the circle
+    # the app icon inside the circle, itself rendered round: the
+    # icon artwork clipped to a circular badge centred in the disc
+    # (user's 2026-10-21 detail ruling - copy his reference exactly,
+    # only the glyph is swapped for our icon, in circular form)
     icon = _app_icon_image()
     if icon is not None:
-        side = int(d * 0.60)
-        img.alpha_composite(icon.resize((side, side), Image.LANCZOS),
-                            (cx - side // 2, cy - side // 2))
+        side = int(d * 0.72)
+        badge = icon.resize((side, side), Image.LANCZOS)
+        mask = Image.new("L", (side, side), 0)
+        ImageDraw.Draw(mask).ellipse([0, 0, side, side], fill=255)
+        badge.putalpha(mask)
+        img.alpha_composite(badge, (cx - side // 2, cy - side // 2))
     else:
         dr.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(51, 80, 126, 255))
         try:
