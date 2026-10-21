@@ -786,10 +786,10 @@ def _vendor_dir() -> Path:
 BALL_PAGE = r"""<!doctype html>
 <html><head><meta charset="utf-8"><style>
 html,body{margin:0;padding:0;background:transparent;overflow:hidden}
-#b{width:58px;height:58px;border-radius:50%;background:#B46A2B;color:#fff;font-size:29px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(16,19,24,.35);border:2px solid #F8F6F0;margin:3px;user-select:none}
+#b{width:58px;height:58px;border-radius:50%;background:#33507E;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(16,19,24,.35);border:2px solid #F8F6F0;margin:3px;user-select:none}
 #b:active{transform:scale(.93)}
 </style></head><body>
-<div id="b" title="LazyScholar · 点我展开，右键退出">🦥</div>
+<div id="b" title="LazyScholar · 点我展开，右键退出"><svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M12 5c-1.8-1.5-4.2-2-7-2v14c2.8 0 5.2.5 7 2 1.8-1.5 4.2-2 7-2V3c-2.8 0-5.2.5-7 2z" fill="#fff"/><path d="M12 5v14" stroke="#33507E" stroke-width="1.4"/></svg></div>
 <script>
 document.getElementById('b').addEventListener('click',()=>{ if(window.pywebview&&window.pywebview.api) window.pywebview.api.toggle_main(); });
 document.addEventListener('contextmenu',e=>{ e.preventDefault(); if(window.pywebview&&window.pywebview.api) window.pywebview.api.quit_app(); });
@@ -1632,10 +1632,10 @@ def run_app(vault: Path, interval: int) -> int:
     # Floating ball: native layered window on Windows; the old
     # pywebview ball remains as a dev fallback elsewhere.
     if app_shell.WIN:
-        ball_ps = app_shell.ball_pixel_size()
-        ball_x = wa_r - ball_ps            # v4.2: docked to the right edge
-        ball_y = int(cfg.get("ball_y") or (wa_t + (wa_h - ball_ps) // 2))
-        ball_y = max(wa_t, min(ball_y, wa_b - ball_ps))  # stay on the edge
+        ball_w, ball_h = app_shell.ball_window_size()
+        ball_x = wa_r - ball_w             # composite flush to the right edge
+        ball_y = int(cfg.get("ball_y") or (wa_t + (wa_h - ball_h) // 2))
+        ball_y = max(wa_t, min(ball_y, wa_b - ball_h))  # stay on the edge
 
         def _ball_moved(x, y):
             # only the height along the edge is worth remembering

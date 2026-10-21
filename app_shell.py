@@ -37,6 +37,19 @@ BALL_SIZE = 60          # logical px of the ball; physical size scales with DPI
 BALL_RENDER = 160       # px for standalone artwork renders (tray fallback)
 
 
+def ball_window_size() -> tuple[int, int]:
+    """Physical (width, height) of the ball window. The ball is a
+    composite (user's 2026-10-21 ruling, DESIGN.md §1): from the
+    screen edge inward - first a slim vertical dock bar flush with
+    the right edge (the 'square'), then the circle overlapping it,
+    with the app icon inside the circle. The window is therefore
+    wider and much taller than the circle it carries."""
+    d = ball_pixel_size()
+    bar_w = max(6, int(d * 0.12))
+    overlap = max(4, int(d * 0.10))
+    return d + bar_w - overlap, int(d * 3.0)
+
+
 def ball_pixel_size() -> int:
     """Physical pixel size for the ball window on this display.
     The artwork is rendered at exactly this size and the layered
@@ -181,33 +194,72 @@ def _app_icon_image():
 
 
 def render_ball_image(px: int = BALL_RENDER):
-    """Render the ball at exactly px x px: the app icon itself
-    (v4.2 - the user asked for the app icon instead of the sloth
-    artwork), with a soft silhouette shadow baked underneath so it
-    floats over the desktop. Falls back to the copper-disc render
-    when no icon is reachable, so the ball never comes up blank."""
-    from PIL import Image, ImageFilter
-    icon = _app_icon_image()
-    if icon is None:
-        return _render_disc_ball(px)
-    img = Image.new("RGBA", (px, px), (0, 0, 0, 0))
-    inset = max(2, int(px * 0.05))
-    side = px - 2 * inset
-    art = icon.resize((side, side), Image.LANCZOS)
-    # shadow: the icon's own silhouette, darkened, blurred, nudged down
-    dark = Image.new("RGBA", (side, side), (8, 10, 20, 150))
-    dark.putalpha(art.split()[3])
-    shadow = Image.new("RGBA", (px, px), (0, 0, 0, 0))
-    shadow.alpha_composite(dark, (inset, inset + max(2, int(px * 0.05))))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(max(1.5, px * 0.04)))
+    """Render the ball artwork for a circle of diameter px, as the
+    composite docked form (DESIGN.md §1): a slim structural-blue
+    dock bar flush with the image's right edge (the 'square'), a
+    white circle overlapping it (the 'round'), and the app icon
+    centred inside the circle. Soft shadows are baked in so the
+    group floats over the desktop. When no icon file is reachable
+    the circle falls back to a blue disc with a white book glyph -
+    the sloth artwork is retired everywhere."""
+    from PIL import Image, ImageDraw, ImageFilter
+    d = px
+    bar_w = max(6, int(d * 0.12))
+    overlap = max(4, int(d * 0.10))
+    W = d + bar_w - overlap
+    H = int(d * 3.0)
+    cx, cy = d // 2, H // 2
+    r = int(d * 0.47)
+    bar_x = W - bar_w
+    bar_pad = int(d * 0.10)
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    # soft shadows under both parts
+    shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ds = ImageDraw.Draw(shadow)
+    ds.rounded_rectangle([bar_x, bar_pad + 4, W, H - bar_pad + 4],
+                         radius=bar_w // 2, fill=(10, 14, 26, 70))
+    ds.ellipse([cx - r, cy - r + 4, cx + r, cy + r + 4], fill=(10, 14, 26, 120))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(max(1.5, d * 0.045)))
     img.alpha_composite(shadow)
-    img.alpha_composite(art, (inset, inset))
+    dr = ImageDraw.Draw(img)
+    # the dock bar (square), structural blue, flush right
+    dr.rounded_rectangle([bar_x, bar_pad, W, H - bar_pad],
+                         radius=bar_w // 2, fill=(51, 80, 126, 255))
+    # the circle (round), white with a hairline edge
+    dr.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(255, 255, 255, 255),
+               outline=(228, 232, 239, 255), width=max(1, d // 60))
+    # the app icon inside the circle
+    icon = _app_icon_image()
+    if icon is not None:
+        side = int(d * 0.60)
+        img.alpha_composite(icon.resize((side, side), Image.LANCZOS),
+                            (cx - side // 2, cy - side // 2))
+    else:
+        dr.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(51, 80, 126, 255))
+        try:
+            from PIL import ImageFont
+            font = None
+            for path in (r"C:\Windows\Fonts\msyhbd.ttc",
+                         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"):
+                try:
+                    font = ImageFont.truetype(path, int(d * 0.42))
+                    break
+                except Exception:
+                    continue
+            if font is not None:
+                box = dr.textbbox((0, 0), "书", font=font)
+                w, h = box[2] - box[0], box[3] - box[1]
+                dr.text((cx - w / 2 - box[0], cy - h / 2 - box[1]), "书",
+                        font=font, fill=(255, 255, 255, 255))
+        except Exception:
+            pass
     return img
 
 
 def _render_disc_ball(px: int):
-    """v4.0 artwork, kept only as the no-icon fallback: copper disc,
-    soft drop shadow, sloth/CJK glyph centred."""
+    """Retired v4.0 artwork (copper disc + sloth), kept unreachable:
+    the fallback inside render_ball_image no longer calls it since
+    the 2026-10-21 sloth purge. Scheduled for deletion."""
     from PIL import Image, ImageDraw, ImageFilter
 
     img = Image.new("RGBA", (px, px), (0, 0, 0, 0))
@@ -357,7 +409,7 @@ class BallWindow:
     def __init__(self, controller, x: int, y: int, on_moved=None):
         self.controller = controller
         self.x, self.y = x, y
-        self.size = ball_pixel_size()
+        self.w, self.h = ball_window_size()
         self.on_moved = on_moved
         self.hwnd = None
         self._thread: threading.Thread | None = None
@@ -400,7 +452,7 @@ class BallWindow:
         hwnd = user32.CreateWindowExW(
             _WS_EX_LAYERED | _WS_EX_TOPMOST | _WS_EX_TOOLWINDOW,
             cls_name, None, _WS_POPUP,
-            self.x, self.y, self.size, self.size, None, None, hinst, None)
+            self.x, self.y, self.w, self.h, None, None, hinst, None)
         if not hwnd:
             return
         self.hwnd = hwnd
@@ -412,15 +464,14 @@ class BallWindow:
             user32.DispatchMessageW(ctypes.byref(msg))
 
     def _paint(self, hwnd) -> None:
-        img = render_ball_image(self.size)
-        px = img.width
+        img = render_ball_image(ball_pixel_size())
         data = _premultiplied_bgra(img)
         user32, gdi32 = _user32, _gdi32
         screen_dc = user32.GetDC(None)
         mem_dc = gdi32.CreateCompatibleDC(screen_dc)
         bmi = _BITMAPINFOHEADER()
         bmi.biSize = ctypes.sizeof(_BITMAPINFOHEADER)
-        bmi.biWidth, bmi.biHeight = px, -px  # top-down DIB
+        bmi.biWidth, bmi.biHeight = img.width, -img.height  # top-down DIB
         bmi.biPlanes, bmi.biBitCount = 1, 32
         bits = ctypes.c_void_p()
         hbmp = gdi32.CreateDIBSection(mem_dc, ctypes.byref(bmi), 0,
@@ -428,7 +479,7 @@ class BallWindow:
         ctypes.memmove(bits, data, len(data))
         old = gdi32.SelectObject(mem_dc, hbmp)
         pt = wintypes.POINT(self.x, self.y)
-        size = wintypes.SIZE(self.size, self.size)
+        size = wintypes.SIZE(img.width, img.height)
         src = wintypes.POINT(0, 0)
         blend = _BLENDFUNCTION(_AC_SRC_OVER, 0, 255, _AC_SRC_ALPHA)
         user32.UpdateLayeredWindow(hwnd, screen_dc, ctypes.byref(pt),
