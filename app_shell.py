@@ -38,13 +38,11 @@ BALL_RENDER = 160       # px for standalone artwork renders (tray fallback)
 
 
 def ball_window_size() -> tuple[int, int]:
-    """Physical (width, height) of the ball window: a square canvas
-    for a single frosted-glass circle (DESIGN.md §1, corrected
-    2026-10-21 - there is NO dock bar: the dark vertical line in the
-    user's reference photo was his page's own scrollbar, not a
-    design element)."""
+    """Physical (width, height) of the ball window: the two-part
+    unit (frosted tab + circle, DESIGN.md §1) is wider than the
+    circle it carries and a little taller."""
     d = ball_pixel_size()
-    return d, d
+    return int(d * 1.72), int(d * 1.43)
 
 
 def ball_pixel_size() -> int:
@@ -191,40 +189,37 @@ def _app_icon_image():
 
 
 def render_ball_image(px: int = BALL_RENDER):
-    """Render the ball: a single frosted-glass circle (DESIGN.md §1,
-    corrected 2026-10-21) with the app icon as a circular badge
-    inside it. The frost is baked into the artwork - a milky,
-    semi-transparent disc with a bright rim and a soft top light -
-    because a per-pixel-alpha layered window has no live backdrop
-    blur; over a real desktop it reads as frosted glass. When no
-    icon file is reachable the badge falls back to a blue disc with
-    a white book glyph - the sloth artwork is retired everywhere."""
+    """Render the ball (DESIGN.md §1, user-confirmed 2026-10-21):
+    ONE unit of TWO parts, read from right to left - first the
+    'square': a frosted tab with straight top/bottom edges and a
+    flat right end that sits flush with the screen edge; then the
+    'round': a semicircle at the tab's left end holding a frosted
+    circle, with the app icon as a circular badge inside it. The
+    frost is baked into the artwork (a per-pixel-alpha layered
+    window has no live backdrop blur). When no icon file is
+    reachable the badge falls back to a blue disc with a white
+    book glyph - the sloth artwork is retired everywhere."""
     from PIL import Image, ImageDraw, ImageFilter
     d = px
-    W = H = d
-    cx, cy = d // 2, d // 2
+    PH = int(d * 1.43)               # tab height
+    W, H = int(d * 1.72), PH
+    cx, cy = 2 + PH // 2, PH // 2    # semicircle centre = circle centre
     r = int(d * 0.44)
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    # soft shadow under the disc
+    # soft shadow under the whole unit
     shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     ds = ImageDraw.Draw(shadow)
-    ds.ellipse([cx - r, cy - r + 4, cx + r, cy + r + 4], fill=(10, 14, 26, 120))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(max(1.5, d * 0.045)))
+    ds.pieslice([6, 6, 6 + PH, PH + 6], 90, 270, fill=(10, 14, 26, 110))
+    ds.rectangle([6 + PH // 2, 6, W, PH + 6], fill=(10, 14, 26, 110))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(max(1.5, d * 0.035)))
     img.alpha_composite(shadow)
     dr = ImageDraw.Draw(img)
-    # frosted disc: milky translucent white with a bright hairline
-    # rim; the soft light cap is composited through the disc's own
-    # mask (ImageDraw would otherwise overwrite the alpha, not blend)
-    dr.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(252, 253, 255, 196),
-               outline=(255, 255, 255, 235), width=max(1, d // 60))
-    cap = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    ImageDraw.Draw(cap).ellipse([cx - r, cy - r, cx + r, cy - int(r * 0.15)],
-                                fill=(255, 255, 255, 50))
-    disc_mask = Image.new("L", (W, H), 0)
-    ImageDraw.Draw(disc_mask).ellipse([cx - r, cy - r, cx + r, cy + r], fill=255)
-    cap.putalpha(Image.composite(cap.split()[3], Image.new("L", (W, H), 0),
-                                 disc_mask))
-    img.alpha_composite(cap)
+    # the tab: semicircle left end, straight edges, flat right end
+    dr.pieslice([2, 2, 2 + PH, PH - 2], 90, 270, fill=(252, 253, 255, 168))
+    dr.rectangle([2 + PH // 2, 2, W, PH - 2], fill=(252, 253, 255, 168))
+    # the frosted circle in the round end
+    dr.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(252, 253, 255, 215),
+               outline=(255, 255, 255, 240), width=max(1, d // 60))
     # the app icon inside the circle, itself rendered round: the
     # icon artwork clipped to a circular badge centred in the disc
     # (user's 2026-10-21 detail ruling - copy his reference exactly,
