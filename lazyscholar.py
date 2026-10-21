@@ -1156,13 +1156,14 @@ function emptyState(title, sub, act){
 async function refreshQueue(){
   try {
     const d = await (await fetch('/api/queue')).json();
+    const items = Array.isArray(d) ? d : (d.queue || []);
     const box = $('#qlist');
-    if (!d.queue.length) { box.innerHTML = emptyState(t('q_empty_t'), t('q_empty'), 'q'); return; }
-    box.innerHTML = d.queue.map(it => `
+    if (!items.length) { box.innerHTML = emptyState(t('q_empty_t'), t('q_empty'), 'q'); return; }
+    box.innerHTML = items.map(it => `
       <div class="qitem">
         <button class="del" data-del="${it.id}">${t('del')}</button>
-        <div class="ttl">${escapeHtml(it.title || it.source)}</div>
-        <div class="meta">${it.kind === 'file' ? t('q_src_file') : t('q_src_link')} · <span class="st st-${it.status}">${t('st_' + it.status)}</span>${it.error ? ' · ' + escapeHtml(it.error) : ''}</div>
+        <div class="ttl">${escapeHtml(it.label || it.value || '')}</div>
+        <div class="meta">${it.kind === 'pdf' ? t('q_src_file') : t('q_src_link')} · <span class="st st-${it.status}">${t('st_' + it.status)}</span>${it.error ? ' · ' + escapeHtml(it.error) : ''}</div>
       </div>`).join('');
     box.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
       await fetch('/api/queue/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: b.dataset.del})});
@@ -1172,14 +1173,14 @@ async function refreshQueue(){
 }
 $('#btn-add').addEventListener('click', async () => {
   const v = $('#q-input').value.trim(); if (!v) return;
-  await fetch('/api/queue', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({source: v})});
+  await fetch('/api/queue', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({kind: 'link', value: v})});
   $('#q-input').value = ''; refreshQueue();
 });
 $('#btn-pick').addEventListener('click', async () => {
   let path = null;
   try { path = await window.pywebview.api.pick_pdf(); } catch(e) {}
   if (path) {
-    await fetch('/api/queue', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({source: path})});
+    await fetch('/api/queue', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({kind: 'pdf', value: path})});
     refreshQueue();
   }
 });
