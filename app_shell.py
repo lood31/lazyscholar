@@ -629,17 +629,23 @@ class AppController:
     # Panel height per tab: the panel hugs its content instead of
     # always occupying the full screen height (v4.0 complaint: a huge
     # slab of empty space under a short queue form).
-    TAB_HEIGHTS = {"queue": 508, "notes": 780, "model": 566, "settings": 596}
+    # content heights per tab, plus the 46px Grammarly-style title
+    # bar the reskin added on top of the webview
+    TAB_HEIGHTS = {"queue": 554, "notes": 826, "model": 612, "settings": 642}
 
     def __init__(self, panel, panel_pos: tuple[int, int],
                  run_queue_now=None, open_vault=None,
-                 panel_w: int = 404, max_h: int = 900):
+                 panel_w: int = 404, max_h: int = 900,
+                 on_panel_moved=None, y_bounds=None):
         self.panel = panel
         self.panel_x, self.panel_y = panel_pos
         self.panel_w = panel_w
         self.max_h = max_h
         self._run_queue_now = run_queue_now
         self._open_vault = open_vault
+        self._on_panel_moved = on_panel_moved
+        self._y_bounds = y_bounds  # (work-area top, work-area bottom)
+        self._cur_h = self.TAB_HEIGHTS["queue"]
         self.tray: Any = None
         self.ball: BallWindow | None = None
         self.q: "queue.Queue[str]" = _make_queue()
@@ -687,6 +693,8 @@ class AppController:
                     self._set_panel(False)
                 elif cmd.startswith("tab:"):
                     self._apply_tab_height(cmd[4:])
+                elif cmd == "snap":
+                    self._do_snap()
                 elif cmd == "run_now" and self._run_queue_now:
                     threading.Thread(target=self._run_queue_now,
                                      daemon=True, name="queue-run").start()
@@ -701,22 +709,59 @@ class AppController:
             return
         h = self.TAB_HEIGHTS.get(name)
         if h:
-            self.panel.resize(self.panel_w, min(h, self.max_h))
+            self._cur_h = min(h, self.max_h)
+            self.panel.resize(self.panel_w, self._cur_h)
+            self._do_snap()  # a taller tab may push the bottom off-screen
+
+    # -- panel dragging: slide along the right edge only --------------
+    def on_window_moved(self, *args) -> None:
+        """pywebview moved-event sink: the title-bar drag is a free
+        native drag, so the correction is queued for the command
+        loop, which snaps the panel back to the edge (DESIGN.md §2:
+        the panel slides along the right edge, never away from it).
+        """
+        if not self.quitting:
+            self.q.put("snap")
+
+    def _do_snap(self) -> None:
+        if self.panel is None or self.quitting or not self.panel_visible:
+            return
+        try:
+            x = int(getattr(self.panel, "x", self.panel_x))
+            y = int(getattr(self.panel, "y", self.panel_y))
+        except Exception:
+            return
+        if self._y_bounds is not None:
+            lo, hi_edge = self._y_bounds
+            y = max(lo, min(y, hi_edge - self._cur_h))
+        if x == self.panel_x and y == self.panel_y:
+            return
+        self.panel_y = y
+        try:
+            self.panel.move(self.panel_x, y)
+        except Exception:
+            return
+        if self._on_panel_moved is not None:
+            try:
+                self._on_panel_moved(y)
+            except Exception:
+                pass
 
     # -- panel show/hide ------------------------------------------------
     def _set_panel(self, visible: bool) -> None:
-        """v4.2: no slide animation - the panel simply appears,
-        docked flush to the right edge of the work area at a fixed
-        position it cannot be dragged from. Ball and panel are never
-        on screen together: opening the panel hides the ball, and
-        closing the panel brings the ball back."""
+        """The panel appears instantly (no slide animation), docked
+        flush to the right edge at its remembered height along the
+        edge; the title bar drags it up and down the edge (see the
+        snap guard above). Ball and panel are never on screen
+        together: opening the panel hides the ball, and closing the
+        panel brings the ball back."""
         if self.panel is None or visible == self.panel_visible:
             return
         self.panel_visible = visible
         win = self.panel
         if visible:
-            h = self.TAB_HEIGHTS.get(self._tab, 508)
-            win.resize(self.panel_w, min(h, self.max_h))
+            self._cur_h = min(self.TAB_HEIGHTS.get(self._tab, 554), self.max_h)
+            win.resize(self.panel_w, self._cur_h)
             win.move(self.panel_x, self.panel_y)
             win.show()
             apply_rounded_corners(win)

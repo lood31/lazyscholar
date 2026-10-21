@@ -803,70 +803,93 @@ APP_PAGE = r"""<!DOCTYPE html>
 <title>LazyScholar</title>
 <style>
   :root{
-    --ink:#101318; --copper:#B46A2B; --copper-bright:#E09A4C;
-    --paper:#F8F6F0; --card:#FFFDF8; --line:#E7DFCF; --muted:#8A8171;
-    --bg:var(--paper); --fg:#221F1A; --rail:var(--ink);
+    --blue:#33507E; --blue-strong:#2F5AA8; --sel:#E3ECFA;
+    --ink:#33507E; --copper:#2F5AA8; --copper-bright:#33507E;
+    --paper:#F8F9FC; --card:#FFFFFF; --line:#E4E8EF; --muted:#6B7686;
+    --bg:#FFFFFF; --fg:#17233B; --titlebar:#F5F7FA; --pill:#FFFFFF;
   }
   body.dark{
-    --bg:#101114; --fg:#ECE7DB; --card:#1B1C20; --line:#33322C; --muted:#9A927E;
+    --bg:#12151C; --fg:#E8ECF4; --card:#1A1F2A; --line:#2A3140; --muted:#93A0B4;
+    --titlebar:#171B24; --pill:#1A1F2A; --sel:#22355C; --paper:#12151C;
+    --blue:#A9C3EE; --copper-bright:#A9C3EE;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   html,body{height:100%;}
   body{
     font-family:"Segoe UI","Microsoft YaHei",sans-serif;
     background:var(--bg); color:var(--fg); overflow:hidden;
-    display:grid; grid-template-columns:1fr 62px;
+    display:grid; grid-template-rows:46px 1fr; grid-template-columns:1fr 66px;
   }
+  #titlebar{
+    grid-column:1 / 3; grid-row:1; background:var(--titlebar);
+    border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:8px; padding:0 8px 0 14px;
+    user-select:none;
+  }
+  #titlebar .tb-drag{display:flex; align-items:center; gap:9px; flex:1; height:100%;}
+  #titlebar img{width:22px; height:22px; border-radius:6px;}
+  #titlebar .tb-name{font-size:13.5px; font-weight:600; letter-spacing:.2px;}
+  #titlebar button{
+    width:34px; height:30px; border:0; border-radius:8px; cursor:pointer;
+    background:transparent; color:var(--muted); font-size:14px; font-family:inherit;
+  }
+  #titlebar button:hover{background:#E7EBF2; color:var(--fg);}
+  body.dark #titlebar button:hover{background:#232A38;}
   #rail{
-    grid-column:2; grid-row:1; background:var(--rail);
+    grid-column:2; grid-row:2; background:transparent;
     display:flex; flex-direction:column; align-items:center;
-    padding:12px 0 10px; gap:6px; user-select:none;
+    padding:10px 8px 12px 2px; gap:10px; user-select:none;
   }
-  #rail .logo{
-    font-size:24px; width:42px; height:42px; border-radius:12px;
-    background:var(--paper); display:flex; align-items:center; justify-content:center;
-    margin-bottom:10px;
+  #pill{
+    flex:1; width:50px; background:var(--pill); border:1px solid var(--line);
+    border-radius:999px; box-shadow:0 4px 16px rgba(23,35,59,.10);
+    display:flex; flex-direction:column; align-items:center;
+    padding:8px 0; gap:4px;
   }
-  #rail button{
-    width:52px; padding:7px 0 6px; border:0; border-radius:12px; cursor:pointer;
-    background:transparent; color:#CFC9BB; font-size:11px;
-    display:flex; flex-direction:column; align-items:center; gap:2px;
+  #pill button{
+    width:42px; height:42px; border:0; border-radius:14px; cursor:pointer;
+    background:transparent; color:var(--blue); padding:0;
+    display:flex; align-items:center; justify-content:center;
     font-family:inherit;
   }
-  #rail button .ic{font-size:19px; line-height:1;}
-  #rail button:hover{background:#1E222B; color:#fff;}
-  #rail button.active{background:#262B36; color:#fff; box-shadow:inset -2px 0 0 var(--copper-bright);}
-  #rail .spacer{flex:1;}
-  #rail .winbtn{font-size:15px; padding:5px 0; width:42px; border-radius:10px;}
-  #rail .dot{width:9px; height:9px; border-radius:50%; background:#C0392B; margin-top:6px;}
-  #rail .dot.on{background:#3FA46A;}
+  #pill button svg{width:21px; height:21px;}
+  #pill button:hover{background:#EFF4FC;}
+  body.dark #pill button:hover{background:#232C40;}
+  #pill button.active{background:var(--sel); color:var(--blue-strong);}
+  #pill .spacer{flex:1;}
+  #avatar{
+    width:34px; height:34px; border-radius:50%; background:var(--sel);
+    display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+  }
+  #avatar .dot{width:9px; height:9px; border-radius:50%; background:#C0392B;}
+  #avatar .dot.on{background:#3FA46A;}
   .panel{
-    grid-column:1; grid-row:1; height:100%; overflow-y:auto;
-    padding:20px 20px 24px; scrollbar-width:thin;
+    grid-column:1; grid-row:2; height:100%; overflow-y:auto;
+    padding:18px 18px 22px; scrollbar-width:thin;
   }
   .page{display:none;}
   .page.active{display:block;}
-  h2{font-family:Georgia,"Songti SC","SimSun",serif; font-size:21px; margin-bottom:6px;}
+  h2{font-size:19px; font-weight:600; margin-bottom:6px; letter-spacing:.2px;}
   .sub{color:var(--muted); font-size:13px; line-height:1.55; margin-bottom:16px;}
   .card{
     background:var(--card); border:1px solid var(--line); border-radius:16px;
-    padding:16px; margin-bottom:14px;
+    padding:16px; margin-bottom:14px; box-shadow:0 1px 3px rgba(23,35,59,.05);
   }
   label{display:block; font-size:12.5px; color:var(--muted); margin:10px 0 4px;}
   label:first-child{margin-top:0;}
   input[type=text], input[type=number], input[type=time], select{
     width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:10px;
-    background:var(--bg); color:var(--fg); font-size:14px; font-family:inherit;
+    background:var(--paper); color:var(--fg); font-size:14px; font-family:inherit;
   }
   .row{display:flex; gap:9px; align-items:center;}
   .row > *{flex:0 0 auto;}
   .row .grow{flex:1;}
   button.btn{
     border:0; border-radius:11px; padding:10px 16px; cursor:pointer;
-    font-size:14px; font-family:inherit; background:var(--ink); color:#F5F1E8;
+    font-size:14px; font-family:inherit; background:var(--ink); color:#F7FAFF;
   }
-  body.dark button.btn{background:var(--copper); color:#14100B;}
-  button.btn.copper{background:var(--copper); color:#FFF7EA;}
+  body.dark button.btn{background:var(--copper); color:#FFFFFF;}
+  button.btn.copper{background:var(--copper); color:#FFFFFF;}
   button.btn.ghost{background:transparent; color:var(--fg); border:1px solid var(--line);}
   button.btn:disabled{opacity:.45; cursor:default;}
   .qitem, .note{
@@ -881,13 +904,17 @@ APP_PAGE = r"""<!DOCTYPE html>
   .st-done{color:#3FA46A;} .st-failed{color:#C0392B;}
   .note{cursor:pointer;}
   .note:hover{border-color:var(--copper-bright);}
-  .note .ttl{font-family:Georgia,"Songti SC","SimSun",serif; font-size:16px; font-weight:600;}
+  .note .ttl{font-size:15.5px; font-weight:600;}
   .badge{
     display:inline-block; font-size:11px; padding:1.5px 8px; border-radius:20px;
-    background:#F0D9BA; color:#7A4A16; margin-right:6px; vertical-align:2px;
+    background:var(--sel); color:var(--blue); margin-right:6px; vertical-align:2px;
   }
-  body.dark .badge{background:#453A28; color:#E9C48A;}
+  body.dark .badge{background:var(--sel); color:var(--blue);}
   .empty{color:var(--muted); font-size:13.5px; padding:16px 2px; line-height:1.6;}
+  .gempty{text-align:center; padding:34px 12px 26px; color:var(--muted);}
+  .gempty svg{width:84px; height:84px; margin-bottom:12px;}
+  .gempty .gt{color:var(--fg); font-size:16.5px; font-weight:600; margin-bottom:6px;}
+  .gempty .gs{font-size:13px; line-height:1.6; max-width:250px; margin:0 auto 14px;}
   .status-line{font-size:14px; margin-bottom:10px;}
   .status-line b{color:var(--copper);}
   body.dark .status-line b{color:var(--copper-bright);}
@@ -902,7 +929,7 @@ APP_PAGE = r"""<!DOCTYPE html>
     display:flex; align-items:center; gap:8px; padding:10px 14px;
     border-bottom:1px solid var(--line);
   }
-  #reader .bar .ttl{font-family:Georgia,"Songti SC","SimSun",serif; font-weight:600; font-size:16px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  #reader .bar .ttl{font-weight:600; font-size:16px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   #reader .bar button{padding:7px 12px; font-size:13px;}
   #reader .bar button.on{background:var(--copper); color:#FFF7EA;}
   #pdf-wrap{flex:1; overflow-y:auto; padding:14px 10px; text-align:center;}
@@ -911,12 +938,19 @@ APP_PAGE = r"""<!DOCTYPE html>
   #pdf-wrap .pg canvas{margin:0;}
   #pdf-wrap .txtlayer{position:absolute; inset:0; overflow:hidden;}
   #pdf-wrap .txtlayer span{position:absolute; white-space:pre; transform-origin:0 0; color:transparent;}
-  #pdf-wrap .hl{position:absolute; background:rgba(224,154,76,.45); border-radius:2px; pointer-events:none;}
+  #pdf-wrap .hl{position:absolute; background:rgba(255,201,60,.45); border-radius:2px; pointer-events:none;}
   #note-body{flex:1; overflow-y:auto; padding:18px 22px; display:none;}
   #note-body .md{max-width:640px; margin:0 auto; line-height:1.75; font-size:15px; white-space:pre-wrap; word-break:break-word; font-family:Georgia,"Songti SC","SimSun",serif;}
 </style>
 </head>
 <body>
+  <header id="titlebar">
+    <div class="tb-drag pywebview-drag-region">
+      <img src="/icon.png" alt="">
+      <span class="tb-name">LazyScholar</span>
+    </div>
+    <button id="win-hide" data-i18n-title="hide" title="收起">✕</button>
+  </header>
   <main class="panel">
     <section class="page active" id="page-queue">
       <h2 data-i18n="q_title">论文队列</h2>
@@ -1007,15 +1041,15 @@ APP_PAGE = r"""<!DOCTYPE html>
   </main>
 
   <nav id="rail">
-    <div class="logo pywebview-drag-region">🦥</div>
-    <button data-tab="queue" class="active"><span class="ic">📥</span><span data-i18n="tab_queue">队列</span></button>
-    <button data-tab="notes"><span class="ic">📝</span><span data-i18n="tab_notes">笔记</span></button>
-    <button data-tab="model"><span class="ic">🦙</span><span data-i18n="tab_model">模型</span></button>
-    <button data-tab="settings"><span class="ic">⚙️</span><span data-i18n="tab_settings">设置</span></button>
-    <div class="spacer"></div>
-    <button class="winbtn" id="win-hide" data-i18n-title="hide" title="收起">—</button>
-    <button class="winbtn" id="win-quit" data-i18n-title="quit" title="退出应用">⏻</button>
-    <div class="dot" id="m-dot"></div>
+    <div id="pill">
+      <button data-tab="queue" class="active" data-i18n-title="tab_queue" title="队列"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="M7 10.5 12 15.5 17 10.5"/><path d="M4.5 19.5h15"/></svg></button>
+      <button data-tab="notes" data-i18n-title="tab_notes" title="笔记"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="13" height="16.5" rx="2"/><path d="M9.8 9h5.7M9.8 12.5h5.7M9.8 16h3.7"/></svg></button>
+      <button data-tab="model" data-i18n-title="tab_model" title="模型"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M10 7V4.5M14 7V4.5M10 19.5V17M14 19.5V17M7 10H4.5M7 14H4.5M19.5 10H17M19.5 14H17"/></svg></button>
+      <button data-tab="settings" data-i18n-title="tab_settings" title="设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M5 12h14M5 17h14"/><circle cx="9.5" cy="7" r="2.1" fill="var(--pill)"/><circle cx="15" cy="12" r="2.1" fill="var(--pill)"/><circle cx="8" cy="17" r="2.1" fill="var(--pill)"/></svg></button>
+      <div class="spacer"></div>
+      <button id="win-quit" data-i18n-title="quit" title="退出应用"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v7"/><path d="M6.3 6.5a8 8 0 1 0 11.4 0"/></svg></button>
+    </div>
+    <div id="avatar"><div class="dot" id="m-dot"></div></div>
   </nav>
 
   <div id="reader">
@@ -1043,6 +1077,7 @@ zh: {
   q_ph:'粘贴 arXiv 链接，如 https://arxiv.org/abs/…', q_add:'加入队列',
   q_pick:'选择本地 PDF…', q_run:'立即处理队列',
   q_empty:'队列是空的。把下一篇论文丢进来排队吧。',
+  q_empty_t:'队列是空的', q_focus:'去粘贴链接', n_empty_t:'还没有笔记',
   q_src_link:'链接', q_src_file:'本地文件',
   st_pending:'排队中', st_processing:'处理中', st_done:'完成', st_failed:'失败', del:'删除',
   n_title:'笔记卡片', n_sub:'管家生成的精读笔记与概念卡都在这里，点开可读论文原文并划线。',
@@ -1067,6 +1102,7 @@ en: {
   q_ph:'Paste an arXiv link, e.g. https://arxiv.org/abs/…', q_add:'Add to queue',
   q_pick:'Choose a local PDF…', q_run:'Process queue now',
   q_empty:'The queue is empty. Drop in the next paper.',
+  q_empty_t:'The queue is empty', q_focus:'Paste a link', n_empty_t:'No notes yet',
   q_src_link:'Link', q_src_file:'Local file',
   st_pending:'Queued', st_processing:'Processing', st_done:'Done', st_failed:'Failed', del:'Delete',
   n_title:'Note Cards', n_sub:'Study notes and concept cards made by the butler. Open one to read the paper and highlight it.',
@@ -1110,12 +1146,18 @@ document.querySelectorAll('#rail button[data-tab]').forEach(b => {
 $('#win-hide').addEventListener('click', () => { try { window.pywebview.api.hide_main(); } catch(e) {} });
 $('#win-quit').addEventListener('click', () => { try { window.pywebview.api.quit_app(); } catch(e) {} });
 
+/* ---------- empty states (Grammarly-style: line art, title, sub) ---------- */
+const BOOK_SVG = `<svg viewBox="0 0 96 96" fill="none" stroke="#33507E" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M48 30c-6-4.5-14-6.5-24-6v46c10-.5 18 1.5 24 6 6-4.5 14-6.5 24-6V24c-10-.5-18 1.5-24 6z"/><path d="M48 30v46"/><path d="M76 13l1.8 4.7 4.7 1.8-4.7 1.8L76 26l-1.8-4.7L69.5 19.5l4.7-1.8z" fill="#FFC93C" stroke="none"/><path d="M19 11l1.2 3.2 3.2 1.2-3.2 1.3L19 20l-1.2-3.3-3.2-1.3 3.2-1.2z" fill="#FFC93C" stroke="none"/></svg>`;
+function emptyState(title, sub, act){
+  return `<div class="gempty">${BOOK_SVG}<div class="gt">${title}</div><div class="gs">${sub}</div>${act === 'q' ? `<button class="btn" onclick="document.getElementById('q-input').focus()">${t('q_focus')}</button>` : ''}</div>`;
+}
+
 /* ---------- queue ---------- */
 async function refreshQueue(){
   try {
     const d = await (await fetch('/api/queue')).json();
     const box = $('#qlist');
-    if (!d.queue.length) { box.innerHTML = `<div class="empty">${t('q_empty')}</div>`; return; }
+    if (!d.queue.length) { box.innerHTML = emptyState(t('q_empty_t'), t('q_empty'), 'q'); return; }
     box.innerHTML = d.queue.map(it => `
       <div class="qitem">
         <button class="del" data-del="${it.id}">${t('del')}</button>
@@ -1165,7 +1207,7 @@ function renderNotes(notes){
     <div class="note" data-open="${n.name}">
       <div class="ttl"><span class="badge">${n.kind === 'paper' ? t('badge_paper') : t('badge_concept')}</span>${escapeHtml(n.title)}</div>
       <div class="meta">${new Date(n.mtime * 1000).toLocaleDateString(LANG === 'en' ? 'en-US' : 'zh-CN')}</div>
-    </div>`).join('') : `<div class="empty">${t('n_empty')}</div>`;
+    </div>`).join('') : emptyState(t('n_empty_t'), t('n_empty'), '');
   document.querySelectorAll('[data-open]').forEach(el => el.addEventListener('click', () => openNote(el.dataset.open)));
 }
 $('#n-search').addEventListener('input', () => renderNotes(notesCache));
@@ -1337,6 +1379,19 @@ def serve_ui(vault: Path, open_browser: bool = False) -> None:
     page = UI_PAGE.encode("utf-8")
     app_page = APP_PAGE.encode("utf-8")
     ball_page = BALL_PAGE.encode("utf-8")
+    icon_png = b""
+    try:
+        import io as _io
+
+        import app_shell as _sh
+
+        _im = _sh._app_icon_image()
+        if _im is not None:
+            _buf = _io.BytesIO()
+            _im.save(_buf, "PNG")
+            icon_png = _buf.getvalue()
+    except Exception:
+        icon_png = b""
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args):  # keep the console clean
@@ -1371,6 +1426,11 @@ def serve_ui(vault: Path, open_browser: bool = False) -> None:
                 self._send(200, app_page, "text/html; charset=utf-8")
             elif u.path == "/ball":
                 self._send(200, ball_page, "text/html; charset=utf-8")
+            elif u.path == "/icon.png":
+                if icon_png:
+                    self._send(200, icon_png, "image/png")
+                else:
+                    self._send(404, b"no icon", "text/plain; charset=utf-8")
             elif u.path.startswith("/vendor/"):
                 name = Path(u.path).name
                 f = _vendor_dir() / name
@@ -1554,8 +1614,10 @@ def run_app(vault: Path, interval: int) -> int:
     wa_w, wa_h = wa_r - wa_l, wa_b - wa_t
     panel_w = 404
     panel_h = app_shell.AppController.TAB_HEIGHTS["queue"]
-    panel_x = wa_r - panel_w               # v4.2: flush to the right edge
-    panel_y = wa_t + 12                    # top-anchored
+    panel_x = wa_r - panel_w               # flush to the right edge
+    # the panel slides along the edge; remember where it was left
+    panel_y = int(cfg.get("panel_y") or (wa_t + 12))
+    panel_y = max(wa_t, min(panel_y, wa_b - panel_h))
 
     icon_path = None
     for cand in (Path(getattr(sys, "_MEIPASS", "")) / "lazyscholar.ico",
@@ -1609,12 +1671,22 @@ def run_app(vault: Path, interval: int) -> int:
         except Exception:
             pass
 
+    def _panel_moved(y):
+        fresh = load_config(vault)
+        fresh["panel_y"] = y
+        save_config(vault, fresh)
+
     ctl = app_shell.AppController(
         panel, (panel_x, panel_y),
         run_queue_now=_run_queue_now,
         open_vault=_open_vault if app_shell.WIN else None,
-        panel_w=panel_w, max_h=wa_h - 24)
+        panel_w=panel_w, max_h=wa_h - 24,
+        on_panel_moved=_panel_moved, y_bounds=(wa_t, wa_b))
     holder["ctl"] = ctl
+    try:
+        panel.events.moved += ctl.on_window_moved
+    except Exception:
+        pass
 
     def _on_closing():
         # Closing the panel only tucks it away; exit belongs to the
