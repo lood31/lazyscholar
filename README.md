@@ -1,122 +1,178 @@
 # LazyScholar
 
-**A zero-effort knowledge butler.** Drop papers, links and chat logs into a folder — a background process does the rest: it fetches metadata, lets a local Gemma write structured study notes, and files them into your Obsidian vault, where they wait for you to simply read them.
+A Windows research companion with a floating sidebar, a local llama.cpp model, and a comfortable paper reader. Queue an arXiv paper, generate an abstract-based study note, then read the original with faithful mathematics and persistent text highlights.
 
-Every productivity tool I tried asked me to be more disciplined. This one asks me for nothing.
+**Local inference · No Ollama · No paid model API · Obsidian optional**
 
-*English | [简体中文](README.zh-CN.md)*
+[中文说明](README.zh-CN.md) · [Windows builds](https://github.com/lood31/lazyscholar/actions/workflows/build.yml) · [Releases](https://github.com/lood31/lazyscholar/releases)
 
-## Why
+## What it does
 
-I read an AI paper every night and have long, deep discussions with AI — then forget most of it within days, because the knowledge is scattered across chat logs, PDFs and my head. My first idea was an Obsidian plugin, but a plugin still asks you to paste links and click buttons. That is a discipline tool, and discipline tools get abandoned. So LazyScholar removes the human from the loop entirely: knowledge files itself.
+- Queue arXiv links/IDs or local PDFs named with their arXiv ID.
+- Generate study notes with a local Gemma/GGUF model through llama.cpp; run immediately or on a schedule.
+- Automatically fetch and cache arXiv HTML. Text reflows, figures are embedded, and WebView2 renders the source MathML locally—no model rewriting of equations.
+- Adjust reading font size, scroll wide equations horizontally, or click a formula/figure to enlarge it.
+- Add highlights by selecting text; erase only a selected portion without clearing the rest of the paper.
+- Keep the complete original PDF available for comparison.
+- Choose a storage folder without automatically moving existing files.
 
-Coming this week, a daily card will also resurface 3 old notes before you forget them — an idea borrowed from a wishlist I once wrote for how an *AI agent's* memory should work: periodic random recall, resurfacing before forgetting. LazyScholar gives my own notes the memory system I wished AI had.
+## Windows quick start
 
-## How it works
+### 1. Get the application and local model
 
+Download an available Windows release, or open a **successful** `build-windows` Actions run for the commit you want and download its `LazyScholar-windows` artifact. Extract it and run `LazyScholar.exe` (inside `dist/` in the Actions artifact).
+
+The EXE does **not** require Python or Obsidian. It does require:
+
+- Windows with the Microsoft Edge **WebView2 Runtime**, used by the desktop UI and native MathML.
+- A local llama.cpp installation and a compatible **GGUF model**, supplied separately. Gemma 3 4B Q4 has been used on the target machine; model speed and memory use depend on your hardware.
+
+**Launcher compatibility:** the app's managed startup command is `llama serve -m <model> -c <context> --port <port>`. Select the `llama` launcher that supports this command; an unrelated executable or a standalone binary without the `serve` subcommand is not interchangeable.
+
+Pushes to `main` build Actions artifacts; only version tags publish GitHub Releases. A source push does not mean a new Release is already available—wait for the corresponding successful build.
+
+### 2. Configure it once
+
+1. Double-click the EXE, then click the floating ball to open the sidebar.
+2. In **Settings / Model**, set the llama executable path and the GGUF file path. Save the settings.
+3. Check the local model port/context size. Defaults are port **8080** and context **16384**.
+4. Optionally choose a storage folder in Settings. **Quit and restart the app to activate the change. Existing files are never moved automatically.**
+
+You can start/stop the model on the Model tab. When processing starts a model for a batch, the app stops that process afterward; an already-running service is not treated as an app-owned process.
+
+### 3. Add a paper and generate its note
+
+In **Queue**, add either:
+
+- An arXiv URL, e.g. `https://arxiv.org/abs/2610.30130`, or an ID such as `2610.30130`.
+- A local PDF whose filename contains an arXiv ID, e.g. `2610.30130.pdf`.
+
+Click **Process now**, or configure the daily processing time. Keep the application running for scheduled processing. Errors are shown on the item; fix the cause and retry rather than repeatedly adding duplicates.
+
+Open the finished paper from **Notes**. The reader provides **Article**, **Note**, and **PDF source** views.
+
+## Reading and annotations
+
+### Original article
+
+Article view automatically obtains arXiv HTML and caches it locally—you do not need to save a webpage for each paper. Use `A− / A+` to change text size. More sections load as you continue reading; wide equations remain scrollable and formulas/figures can be enlarged.
+
+If HTML is unavailable or a request fails, the app shows the error and a retry button. Open **PDF source** for the complete original instead. It does not silently substitute fragmented PDF formula extraction for valid mathematics.
+
+### Highlight text
+
+1. Open **Article** or **PDF source**.
+2. Enable **Highlight**.
+3. Drag across ordinary text and release to save a yellow mark.
+4. Click the mode button again to return to ordinary selection/copying.
+
+### Erase only what you select
+
+1. Click **Erase highlights** to enter eraser mode. **Clicking the button does not delete any marks.**
+2. Drag across the highlighted portion you want to remove.
+3. Only the selected overlap is erased. Selecting the middle leaves both ends; other highlights and unmarked text stay unchanged.
+4. Click **Exit eraser** to leave the mode. Highlight and eraser modes are mutually exclusive.
+
+Partial erasing works in both Article and PDF comparison views, and saved changes survive reopening. Article text annotations also survive font changes. Formula glyphs, figure images, and Note view are not Article text-highlight anchors.
+
+Legacy PDF text annotations migrate to HTML only when the quoted text has a unique exact match. Original annotation files are retained; unmatched quotes remain available in the reader rather than being silently attached to a different sentence.
+
+## Storage, network and privacy
+
+- Notes and reading data live in the selected folder. Typical folders include `papers/`, `concepts/`, `papers_pdf/`, `html_reader/`, `reader/` and `highlights/`; settings/queue state are stored alongside them.
+- Changing the selected folder takes effect **after restarting**. It does not migrate, delete, or merge the old folder.
+- Explicit `--vault` takes priority; `LAZYSCHOLAR_VAULT` also overrides the saved GUI selection. The app displays an override notice.
+- Model inference is local. arXiv metadata and uncached HTML/images/PDFs still require network access; cached article reading does not require downloading the article again.
+- The optional **HTML/image proxy** field is blank by default and uses system network settings. If needed, enter an HTTP(S) proxy address such as `http://127.0.0.1:<your-port>`. This field applies to HTML/images, not the local model, and does not modify system proxy/TUN settings. Proxy credentials in the URL are not supported.
+- Downloaded paper scripts/styles are not embedded into the privileged desktop page. Source MathML is preserved and rendered locally.
+
+## Important limits
+
+- **Generated study notes are based on the arXiv abstract, not an AI analysis of the complete PDF.** Full-text reading is a separate source-preserving feature.
+- Some papers have no arXiv HTML edition. Use the complete PDF in that case.
+- There is no automatic mathematical OCR or model-based equation repair.
+- The desktop queue currently expects an arXiv identifier; it is not a general arbitrary-PDF ingestion tool.
+- Backlinks and daily replay are not included in this delivery.
+
+## Run from source
+
+Python **3.13 on Windows** is the tested setup. From PowerShell:
+
+```powershell
+git clone https://github.com/lood31/lazyscholar.git
+cd lazyscholar
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe lazyscholar.py --app
 ```
-inbox/  ──▶  route  ──▶  fetch / read  ──▶  local Gemma writes  ──▶  vault
-(drop)     (by type)    (arXiv API)        (study note / card)     (filed)
+
+To choose a folder explicitly:
+
+```powershell
+.\.venv\Scripts\python.exe lazyscholar.py --app --vault "D:\MyScholarVault"
 ```
 
-1. **Watch** — a Python process polls `inbox/` every 30 seconds and only touches files whose size has stopped changing (so a file that is still copying is never half-read).
-2. **Route & fetch** — a text file containing an arXiv link, or a PDF named with an arXiv ID, is resolved through the arXiv API for title, authors and abstract. Other `.txt`/`.md` files are treated as discussion logs.
-3. **Read** — a local Gemma model (served by llama.cpp) writes the note:
-   - *Papers* become a study note in a fixed template: one-line summary, a guided reading in Chinese, key points, bilingual vocabulary, and one read-aloud sentence picked from the abstract.
-   - *Discussions* become a concept card: the core concept, the key points distilled, follow-up questions worth asking — with the original text preserved at the bottom.
-4. **File** — notes land in `papers/`, concept cards in `concepts/`, processed sources move to `processed/`, and every event is written to `lazyscholar.log`.
-5. **No silent failures** — if anything fails (arXiv rate limit, model server down), the file stays in `inbox/`, the error is logged, and a `daily/<date>-errors.md` card tells you what happened. LazyScholar never writes a fake note.
+HTTP-only mode, without inbox polling:
 
-*Landing this week: candidate `[[backlinks]]` between notes, and the daily replay card.*
-
-## The app
-
-LazyScholar ships with a built-in web app — **no Obsidian required**. While the butler runs, open `http://127.0.0.1:8765` in any browser: a sidebar shows your inbox status, paper notes and concept cards, and the reading pane renders each note as a calm, magazine-like page. Model offline? The status pill tells you. Something failed today? A banner points you at the error card. The app and Obsidian read the same files, so use either — or both.
-
-To run just the app without the butler: `python lazyscholar.py --vault <path> --ui`.
-
-## What you drop in, what you get out
-
-| You drop into `inbox/` | You get | Where |
-| --- | --- | --- |
-| A `.txt` file containing an arXiv link, e.g. `https://arxiv.org/abs/2510.16720` | A structured study note (summary / guide / key points / vocab / read-aloud sentence) + the abstract | `papers/<id>-<title>.md` |
-| A PDF named with its arXiv ID, e.g. `2510.16720.pdf` | The same study note (v1 reads metadata + abstract; the PDF itself is archived, full-text parsing is not in v1) | `papers/<id>-<title>.md`, PDF in `processed/` |
-| A discussion / chat log (`.md` or `.txt`, no arXiv link) | A concept card: core concept, distilled key points, follow-up questions, source attached | `concepts/<filename>.md` |
-| Anything else | Left untouched in `inbox/` and noted in the log | — |
-| (when something fails) | The file stays in `inbox/` and an error card explains why | `daily/<date>-errors.md` |
-
-## Requirements
-
-- **Python 3.11+** — standard library only, nothing to `pip install`.
-- **llama.cpp** with any recent Gemma GGUF (developed and tested with Gemma 3 4B IT QAT, Q4_0, ~2.4 GB).
-- **A vault folder** — an Obsidian vault is nicest, but any folder works; LazyScholar just writes Markdown.
-- Developed on Windows 11; the script itself is plain cross-platform Python.
-
-## Setup
-
-**1. Get the model** (llama.cpp desktop app or CLI):
-
-```bash
-llama download -hf ggml-org/gemma-3-4b-it-qat-GGUF:Q4_0
+```powershell
+.\.venv\Scripts\python.exe lazyscholar.py --ui --vault "D:\MyScholarVault"
 ```
 
-**2. Start the model server** — and keep it running while LazyScholar works:
+Then open `http://127.0.0.1:8765/app`. Native tray/file-folder dialogs require desktop mode. Use `--help` for the retained command-line inbox-polling options; that path is separate from the desktop queue.
 
-```bash
-llama serve -m /path/to/gemma-3-4b-it-qat-Q4_0.gguf -c 16384 --port 8080
+### Build a portable EXE
+
+From the repository root, after installing the runtime dependencies:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install pyinstaller
+.\.venv\Scripts\python.exe -m PyInstaller --noconfirm --windowed --onefile --name LazyScholar --icon lazyscholar.ico --collect-all webview --collect-all pystray --collect-all pdfplumber --collect-all pdfminer --collect-all pypdfium2 --collect-all bleach --collect-all bs4 --collect-all defusedxml --add-data "vendor;vendor" --add-data "lazyscholar.ico;." lazyscholar.py
 ```
 
-`-c 16384` matters: llama.cpp presets often default to a 4096-token context, which silently truncates longer inputs. Any port works as long as step 3 agrees with it (see Configuration).
-
-**3. Start the butler:**
-
-```bash
-python lazyscholar.py --vault /path/to/your/vault
-```
-
-The vault folders (`inbox/`, `processed/`, `papers/`, `concepts/`, `daily/`) are created automatically on first run. Add `--once` to process whatever is in the inbox right now and exit — handy for testing. On Windows, a double-clickable launcher that starts both the server and the butler is easy to make from `start-lazyscholar.bat` (fill in your paths).
-
-**4. Drop something into `inbox/`** and watch `lazyscholar.log`. Within about a minute, your note appears in `papers/` or `concepts/`.
-
-## Day-to-day use
-
-You only ever do three things:
-
-1. **Drop** — save a paper link, a PDF, or a chat log into `inbox/`. From anywhere: the share sheet, a download folder, a screenshot of a chat (save the text) — if it lands in the folder, it gets filed.
-2. **Read** — open your vault when you feel like it. Notes are already written, structured, and in your nightly reading format.
-3. **Glance at the error card** — if `daily/` has an errors card, something needs you (usually: the model server wasn't running, or arXiv asked you to slow down). Nothing ever disappears silently.
-
-## Configuration
-
-| Setting | How | Default |
-| --- | --- | --- |
-| Model server URL | env `LAZYSCHOLAR_LLAMA` | `http://127.0.0.1:8080` |
-| Model name sent to the server | env `LAZYSCHOLAR_MODEL` | `gemma-3-4b-it-qat-Q4_0` |
-| Poll interval | `--interval <seconds>` | `30` |
-| Single pass, then exit | `--once` | off (runs forever) |
-
-Using the llama.cpp desktop app's built-in server instead? It listens on `http://127.0.0.1:9931` by default — set `LAZYSCHOLAR_LLAMA` to that and skip step 2.
+Output: `dist/LazyScholar.exe`. The bundled Python dependencies do not include the local GGUF model or the system WebView2 runtime. The older `build-app.cmd` / `deploy-v2.ps1` helpers contain maintainer-machine paths; use the commands above for a different checkout location.
 
 ## Troubleshooting
 
-| Symptom | What it means | Fix |
-| --- | --- | --- |
-| Error card says `Connection refused` / `WinError 10061` | The model server isn't running | Start `llama serve` (step 2), then just wait — the file is still in `inbox/` and will be retried |
-| Error card says `HTTP Error 429` | arXiv rate-limited your IP (common on shared campus networks) | Nothing to do: LazyScholar already retries with backoff; if it still fails, the file stays in `inbox/` for the next run |
-| A file just sits in `inbox/` | Still copying, unsupported type, or the butler isn't running | Check `lazyscholar.log` — it says exactly what happened |
-| Note sections look off | A 4B model improvising | The abstract/source is always attached at the bottom of the note — check against it, and tweak the prompt templates in `lazyscholar.py` |
+| Symptom | What to check |
+| --- | --- |
+| No model starts | Check launcher/GGUF paths, the `llama serve` command, port conflicts and `model-server.log` in the storage folder. |
+| A paper fails to process | Check its arXiv ID, connectivity and visible queue error, then retry. A PDF filename needs an arXiv ID. |
+| HTML cannot be obtained | Retry, check the optional HTML proxy, or open PDF source. Not every paper has HTML. |
+| New storage folder is not active | Quit and restart; remove an unintended `--vault` / `LAZYSCHOLAR_VAULT` override. Old files are deliberately not moved. |
+| Text selection adds/removes marks | Exit Highlight/Eraser mode to return to normal copying. |
+| UI or mathematics does not display | Check that WebView2 is installed and up to date. |
 
-## Design principles
+## Development checks
 
-- **Local and open only** — a local open-weight model, no API keys, no cloud; private reading history never leaves the machine, and dorm Wi-Fi can't hurt it.
-- **Zero ongoing cost** — a student budget means zero API bills.
-- **Honest failures** — errors are reported on a card, never swallowed; a note is only written when the model actually wrote it.
-- **Stdlib only** — if Python runs, LazyScholar runs. No dependency roulette.
+Use the same Python environment that has the dependencies installed. If it is not activated, replace `python` below with `.\.venv\Scripts\python.exe`.
 
-## Status
+Offline backend/extractor tests:
 
-Built for DEV Hacktoberfest 2026, Week 3 ("Slow and Steady"). End-to-end generation is verified working on the target machine (2026-10-20): a dropped arXiv link produced a full study note, and a discussion log produced a concept card, with sources archived and zero manual steps. The built-in sidebar web app landed the same evening and is verified against real notes. Still to come this week: `[[backlink]]` suggestions and the daily replay card; then the DEV write-up.
+```powershell
+python -B scripts/test_app_backend.py
+python -B scripts/test_paper_reader.py
+python -B scripts/test_paper_html.py
+```
 
-## License
+Browser regressions additionally require Playwright and its Chromium installation:
 
-MIT
+```powershell
+python -m pip install playwright
+python -m playwright install chromium
+python -B scripts/test_reader_browser.py
+python -B scripts/test_highlight_eraser.py
+```
+
+Interactive Windows acceptance uses an isolated test folder and briefly moves/restores the mouse. Keep its test window in the foreground and pause manual input:
+
+```powershell
+python -B scripts/test_native_highlight.py --exe dist/LazyScholar.exe --focus-wait 60
+```
+
+Backend/browser tests, source MathML display and real Windows mouse highlighting/partial erasing have been exercised locally. Browser-created selections are **not** a substitute for native-input acceptance. Generated QA folders, local notes, model weights and handover snapshots are not published as source.
+
+## Project and license
+
+Built for DEV Hacktoberfest 2026, Week 3: **Slow and Steady**. The aim is a small, private study companion, not a cloud knowledge platform.
+
+Application code: [MIT](LICENSE). llama.cpp, model weights and bundled third-party components retain their own licenses.

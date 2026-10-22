@@ -28,32 +28,39 @@ from typing import Any
 
 WIN = sys.platform == "win32"
 
+_dpi_done = False  # process DPI awareness fixed up once, see _dpi_ready()
+_cursor_hand = 0
+_cursor_hand_loaded = False
+
 WAKE_PORT = 47811
 WAKE_MAGIC = b"lazyscholar:show"
 MUTEX_NAME = r"Local\LazyScholar-SingleInstance-7F3A"
 ERROR_ALREADY_EXISTS = 183
 
-BALL_SIZE = 60          # logical px of the ball; physical size scales with DPI
+BALL_SIZE = 42          # logical px of the ball; physical size scales with DPI
+                        # (user-tunable via the vault config key "ball_size")
 BALL_RENDER = 160       # px for standalone artwork renders (tray fallback)
 
 
-def ball_window_size() -> tuple[int, int]:
+def ball_window_size(size: int | None = None) -> tuple[int, int]:
     """Physical (width, height) of the ball window: the two-part
     unit (frosted tab + circle, DESIGN.md §1) is wider than the
     circle it carries and a little taller."""
-    d = ball_pixel_size()
+    d = ball_pixel_size(size)
     return int(d * 1.72), int(d * 1.43)
 
 
-def ball_pixel_size() -> int:
+def ball_pixel_size(size: int | None = None) -> int:
     """Physical pixel size for the ball window on this display.
     The artwork is rendered at exactly this size and the layered
     window is created at exactly this size: UpdateLayeredWindow maps
     the source bitmap 1:1, so any mismatch between the two crops the
     picture (the v4.0 bug: 160px art in a 72px window showed only the
     top-left corner of the ball)."""
+    base = int(size or BALL_SIZE)
     if not WIN:
-        return BALL_SIZE
+        return base
+    _dpi_ready()
     pct = 100
     try:
         pct = int(ctypes.windll.shcore.GetScaleFactorForDevice(0)) or 100
@@ -62,7 +69,7 @@ def ball_pixel_size() -> int:
             pct = round(ctypes.windll.user32.GetDpiForSystem() / 96 * 100)
         except Exception:
             pct = 100
-    return max(48, min(168, round(BALL_SIZE * pct / 100)))
+    return max(32, min(168, round(base * pct / 100)))
 
 
 # ----------------------------------------------------------------------
@@ -164,7 +171,7 @@ def _app_icon_image():
     """The app icon (lazyscholar.ico) as an RGBA image at its largest
     embedded size, or None when no icon file is reachable. Search
     order: the PyInstaller bundle, the module's own folder, the cwd."""
-    from PIL import Image
+    from PIL import IcoImagePlugin, Image
     here = Path(__file__).resolve().parent
     cands = []
     meipass = getattr(sys, "_MEIPASS", "")
@@ -175,14 +182,12 @@ def _app_icon_image():
     for cand in cands:
         try:
             if cand.exists():
-                img = Image.open(cand)
-                try:
-                    sizes = img.ico.sizes()
-                    if sizes:
-                        img.size = max(sizes)
-                except Exception:
-                    pass
-                return img.convert("RGBA")
+                with Image.open(cand) as img:
+                    if isinstance(img, IcoImagePlugin.IcoImageFile):
+                        sizes = img.ico.sizes()
+                        if sizes:
+                            return img.ico.getimage(max(sizes)).convert("RGBA")
+                    return img.convert("RGBA")
         except Exception:
             continue
     return None
@@ -227,7 +232,7 @@ def render_ball_image(px: int = BALL_RENDER):
     icon = _app_icon_image()
     if icon is not None:
         side = int(d * 0.63)
-        badge = icon.resize((side, side), Image.LANCZOS)
+        badge = icon.resize((side, side), Image.Resampling.LANCZOS)
         mask = Image.new("L", (side, side), 0)
         ImageDraw.Draw(mask).ellipse([0, 0, side, side], fill=255)
         badge.putalpha(mask)
@@ -342,6 +347,8 @@ if WIN:
     _WM_LBUTTONDOWN, _WM_LBUTTONUP, _WM_RBUTTONUP, _WM_MOUSEMOVE = 0x0201, 0x0202, 0x0205, 0x0200
     _ULW_ALPHA, _AC_SRC_OVER, _AC_SRC_ALPHA = 2, 0, 1
     _WM_BALL_SHOW, _WM_BALL_HIDE = 0x8000 + 41, 0x8000 + 42  # WM_APP range
+    _WM_SETCURSOR = 0x0020
+    _IDC_ARROW, _IDC_HAND = 32512, 32649
 
     class _BLENDFUNCTION(ctypes.Structure):
         _fields_ = [("BlendOp", ctypes.c_byte), ("BlendFlags", ctypes.c_byte),
@@ -386,15 +393,40 @@ if WIN:
         wintypes.HWND, wintypes.HMENU, wintypes.HINSTANCE, ctypes.c_void_p]
     _user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT,
                                        wintypes.WPARAM, wintypes.LPARAM]
-    _user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND,
+    _user32.SetWindowPos.argtypes = [wintypes.HWND, ctypes.c_void_p,
                                      ctypes.c_int, ctypes.c_int, ctypes.c_int,
                                      ctypes.c_int, wintypes.UINT]
     _user32.SetWindowPos.restype = wintypes.BOOL
     _user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT,
                                      wintypes.WPARAM, wintypes.LPARAM]
+    _user32.LoadCursorW.argtypes = [wintypes.HINSTANCE, ctypes.c_void_p]
+    _user32.LoadCursorW.restype = wintypes.HANDLE
+    _user32.SetCursor.argtypes = [wintypes.HANDLE]
+    _user32.SetCursor.restype = wintypes.HANDLE
     _user32.PostMessageW.restype = wintypes.BOOL
     _user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT,
                                      wintypes.WPARAM, wintypes.LPARAM]
+
+
+def _ball_cursor() -> int:
+    """IDC_HAND for the ball ("this is clickable").
+
+    Without a class cursor the window inherits whatever cursor was last
+    installed system-wide, which is why hovering the ball could show the
+    busy / app-starting spinner instead of a pointer.
+    """
+    if not WIN:
+        return 0
+    global _cursor_hand, _cursor_hand_loaded
+    if not _cursor_hand_loaded:
+        _cursor_hand_loaded = True
+        try:
+            _cursor_hand = int(_user32.LoadCursorW(None, ctypes.c_void_p(_IDC_HAND))
+                               or _user32.LoadCursorW(None, ctypes.c_void_p(_IDC_ARROW))
+                               or 0)
+        except Exception:
+            _cursor_hand = 0
+    return _cursor_hand
 
 
 class BallWindow:
@@ -405,10 +437,12 @@ class BallWindow:
     the panel is open. Right-click -> controller.quit().
     No-op shell off Windows."""
 
-    def __init__(self, controller, x: int, y: int, on_moved=None):
+    def __init__(self, controller, x: int, y: int, on_moved=None,
+                 size: int | None = None):
         self.controller = controller
         self.x, self.y = x, y
-        self.w, self.h = ball_window_size()
+        self.size = size
+        self.w, self.h = ball_window_size(size)
         self.on_moved = on_moved
         self.hwnd = None
         self._thread: threading.Thread | None = None
@@ -439,6 +473,7 @@ class BallWindow:
 
     # -- internals (ball thread only) ---------------------------------
     def _run(self) -> None:
+        _dpi_ready()
         user32, gdi32 = _user32, _gdi32
         hinst = _kernel32w.GetModuleHandleW(None)
         cls_name = "LazyScholarBallWindow"
@@ -446,6 +481,7 @@ class BallWindow:
         wc = _WNDCLASSW()
         wc.lpfnWndProc = ctypes.cast(self._wndproc, ctypes.c_void_p)
         wc.hInstance = hinst
+        wc.hCursor = _ball_cursor()
         wc.lpszClassName = cls_name
         user32.RegisterClassW(ctypes.byref(wc))
         hwnd = user32.CreateWindowExW(
@@ -463,7 +499,7 @@ class BallWindow:
             user32.DispatchMessageW(ctypes.byref(msg))
 
     def _paint(self, hwnd) -> None:
-        img = render_ball_image(ball_pixel_size())
+        img = render_ball_image(ball_pixel_size(self.size))
         data = _premultiplied_bgra(img)
         user32, gdi32 = _user32, _gdi32
         screen_dc = user32.GetDC(None)
@@ -491,6 +527,11 @@ class BallWindow:
 
     def _proc(self, hwnd, msg, wparam, lparam):
         user32 = _user32
+        if msg == _WM_SETCURSOR:
+            cur = _ball_cursor()
+            if cur:
+                user32.SetCursor(cur)
+                return 1  # handled: never inherit the system's busy cursor
         if msg == _WM_LBUTTONDOWN:
             pt = wintypes.POINT()
             user32.GetCursorPos(ctypes.byref(pt))
@@ -544,16 +585,95 @@ class BallWindow:
 # ----------------------------------------------------------------------
 # panel effects
 # ----------------------------------------------------------------------
+# DPI
+def _dpi_ready() -> None:
+    """Force this process to be per-monitor DPI aware before any geometry
+    is computed.
+
+    WinForms (pythonnet) only flips the process to DPI-aware when the first
+    window is created - which happens *after* run_app has already measured
+    the work area. That measurement therefore came back virtualised (1707px
+    instead of 2560px on a 150% display) while every window created after it
+    was laid out in physical pixels, so the ball and the panel floated in the
+    middle of the screen instead of sitting flush against the right edge.
+    """
+    global _dpi_done
+    if _dpi_done or not WIN:
+        return
+    _dpi_done = True
+    try:  # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 == -4
+        if _user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return
+    except Exception:
+        pass
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        pass
+
+
 def work_area() -> tuple[int, int, int, int]:
     """(left, top, right, bottom) of the primary work area in
     physical pixels (ctypes metrics, consistent with pywebview's own
     coordinate space on the target machine)."""
     if WIN:
+        _dpi_ready()
         rect = wintypes.RECT()
         if _user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(rect), 0):
             return rect.left, rect.top, rect.right, rect.bottom
         return (0, 0, _user32.GetSystemMetrics(0), _user32.GetSystemMetrics(1))
     return (0, 0, 1920, 1080)
+
+
+def dpi_scale() -> float:
+    """Physical pixels per logical pixel on the primary display."""
+    if not WIN:
+        return 1.0
+    _dpi_ready()
+    try:
+        dpi = int(_user32.GetDpiForSystem()) or 96
+    except Exception:
+        dpi = 96
+    return dpi / 96.0
+
+
+def window_hwnd(window) -> int | None:
+    if not WIN or window is None:
+        return None
+    try:
+        return int(window.native.Handle.ToInt64())
+    except Exception:
+        return None
+
+
+def window_rect(window) -> tuple[int, int, int, int] | None:
+    """(left, top, width, height) of a pywebview window in physical px."""
+    hwnd = window_hwnd(window)
+    if not hwnd:
+        return None
+    rect = wintypes.RECT()
+    if not _user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+        return None
+    return rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top
+
+
+def place_window(window, x: int, y: int, w: int, h: int) -> bool:
+    """Position/size a pywebview window in *physical* pixels.
+
+    pywebview's own move()/resize() go through WinForms AutoScale, which
+    multiplies logical coordinates by the DPI factor - so numbers computed
+    in physical pixels (like the ones the native ball window uses) came out
+    scaled twice. SetWindowPos keeps the panel and the ball in one space.
+    """
+    hwnd = window_hwnd(window)
+    if not hwnd:
+        return False
+    _HWND_TOPMOST = ctypes.c_void_p(-1)
+    _SWP_NOACTIVATE, _SWP_NOOWNERZORDER = 0x0010, 0x0200
+    ok = bool(_user32.SetWindowPos(hwnd, _HWND_TOPMOST, int(x), int(y),
+                                   int(w), int(h),
+                                   _SWP_NOACTIVATE | _SWP_NOOWNERZORDER))
+    return ok
 
 
 def apply_rounded_corners(window) -> None:
@@ -626,26 +746,24 @@ class AppController:
     thread is the one pywebview gives to webview.start(func=...).
     """
 
-    # Panel height per tab: the panel hugs its content instead of
-    # always occupying the full screen height (v4.0 complaint: a huge
-    # slab of empty space under a short queue form).
-    # content heights per tab, plus the 46px Grammarly-style title
-    # bar the reskin added on top of the webview
-    TAB_HEIGHTS = {"queue": 554, "notes": 826, "model": 612, "settings": 642}
+    # One logical height, aligned to the settings page. Long pages scroll
+    # inside the panel; _tab_h still clamps it to the current work area.
+    TAB_HEIGHTS = {"queue": 642, "notes": 642, "model": 642, "settings": 642}
 
     def __init__(self, panel, panel_pos: tuple[int, int],
                  run_queue_now=None, open_vault=None,
                  panel_w: int = 404, max_h: int = 900,
-                 on_panel_moved=None, y_bounds=None):
+                 on_panel_moved=None, y_bounds=None, scale: float = 1.0):
         self.panel = panel
         self.panel_x, self.panel_y = panel_pos
-        self.panel_w = panel_w
-        self.max_h = max_h
+        self.panel_w = panel_w          # physical px
+        self.max_h = max_h              # physical px
+        self.scale = scale or 1.0
         self._run_queue_now = run_queue_now
         self._open_vault = open_vault
         self._on_panel_moved = on_panel_moved
         self._y_bounds = y_bounds  # (work-area top, work-area bottom)
-        self._cur_h = self.TAB_HEIGHTS["queue"]
+        self._cur_h = self._tab_h("queue")
         self.tray: Any = None
         self.ball: BallWindow | None = None
         self.q: "queue.Queue[str]" = _make_queue()
@@ -703,15 +821,39 @@ class AppController:
             except Exception:
                 pass  # a failed window op must never kill the loop
 
+    def _tab_h(self, name: str) -> int:
+        """Physical height for a tab: the TAB_HEIGHTS table is authored in
+        logical px and scaled here so the panel keeps its proportions on a
+        high-DPI display."""
+        h = self.TAB_HEIGHTS.get(name, self.TAB_HEIGHTS["queue"])
+        return max(1, min(round(h * self.scale), self.max_h))
+
+    def _place(self, y: int | None = None) -> None:
+        """Dock the panel to the right edge at (clamped) height y."""
+        if self.panel is None:
+            return
+        if y is None:
+            y = self.panel_y
+        if self._y_bounds is not None:
+            lo, hi_edge = self._y_bounds
+            y = max(lo, min(int(y), hi_edge - self._cur_h))
+        self.panel_y = int(y)
+        if place_window(self.panel, self.panel_x, self.panel_y,
+                        self.panel_w, self._cur_h):
+            return
+        # non-Windows (or no HWND yet): pywebview's own logical API
+        try:
+            self.panel.resize(self.panel_w, self._cur_h)
+            self.panel.move(self.panel_x, self.panel_y)
+        except Exception:
+            pass
+
     def _apply_tab_height(self, name: str) -> None:
         self._tab = name
         if self.panel is None:
             return
-        h = self.TAB_HEIGHTS.get(name)
-        if h:
-            self._cur_h = min(h, self.max_h)
-            self.panel.resize(self.panel_w, self._cur_h)
-            self._do_snap()  # a taller tab may push the bottom off-screen
+        self._cur_h = self._tab_h(name)
+        self._place()  # a taller tab may push the bottom off-screen
 
     # -- panel dragging: slide along the right edge only --------------
     def on_window_moved(self, *args) -> None:
@@ -726,24 +868,24 @@ class AppController:
     def _do_snap(self) -> None:
         if self.panel is None or self.quitting or not self.panel_visible:
             return
-        try:
-            x = int(getattr(self.panel, "x", self.panel_x))
-            y = int(getattr(self.panel, "y", self.panel_y))
-        except Exception:
-            return
+        rect = window_rect(self.panel)
+        if rect is not None:
+            x, y = rect[0], rect[1]       # physical px
+        else:
+            try:
+                x = int(getattr(self.panel, "x", self.panel_x))
+                y = int(getattr(self.panel, "y", self.panel_y))
+            except Exception:
+                return
         if self._y_bounds is not None:
             lo, hi_edge = self._y_bounds
             y = max(lo, min(y, hi_edge - self._cur_h))
         if x == self.panel_x and y == self.panel_y:
             return
-        self.panel_y = y
-        try:
-            self.panel.move(self.panel_x, y)
-        except Exception:
-            return
+        self._place(y)
         if self._on_panel_moved is not None:
             try:
-                self._on_panel_moved(y)
+                self._on_panel_moved(self.panel_y)
             except Exception:
                 pass
 
@@ -760,10 +902,9 @@ class AppController:
         self.panel_visible = visible
         win = self.panel
         if visible:
-            self._cur_h = min(self.TAB_HEIGHTS.get(self._tab, 554), self.max_h)
-            win.resize(self.panel_w, self._cur_h)
-            win.move(self.panel_x, self.panel_y)
+            self._cur_h = self._tab_h(self._tab)
             win.show()
+            self._place()
             apply_rounded_corners(win)
         else:
             win.hide()

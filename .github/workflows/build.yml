@@ -25,13 +25,21 @@ jobs:
           python-version: '3.13'
 
       - name: Install dependencies
-        run: pip install pywebview pyinstaller pillow pystray
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Backend and reflow regressions
+        run: |
+          python -B scripts/test_app_backend.py
+          python -B scripts/test_paper_reader.py
+          python -B scripts/test_paper_html.py
 
       - name: Build single-file exe
         run: >
           python -m PyInstaller --noconfirm --clean --windowed --onefile
           --name LazyScholar --icon lazyscholar.ico
           --collect-all webview --collect-all pystray
+          --collect-all pdfplumber --collect-all pdfminer --collect-all pypdfium2
+          --collect-all bleach --collect-all bs4 --collect-all defusedxml
           --add-data "vendor;vendor" --add-data "lazyscholar.ico;."
           lazyscholar.py
 

@@ -4,8 +4,10 @@
 # children, which get killed with the parent's job object.
 param(
   [string]$Exe = 'D:\lazyscholar\dist\LazyScholar.exe',
-  [string]$Vault = 'D:\LazyScholarVault'
+  [string]$Vault = ''
 )
-$cmd = '"' + $Exe + '" --app --vault "' + $Vault + '"'
+$cmd = '"' + $Exe + '" --app'
+# Normally honor the folder selected in Settings; -Vault is an explicit override.
+if ($Vault) { $cmd += ' --vault "' + $Vault + '"' }
 $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $cmd }
 "launch returnvalue=$($r.ReturnValue) pid=$($r.ProcessId)"

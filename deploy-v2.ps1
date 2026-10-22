@@ -20,13 +20,15 @@ Note 'old processes stopped'
 # 2. Sync the vault copy (script + shell layer + pdf.js vendor)
 Copy-Item 'D:\lazyscholar\lazyscholar.py' 'D:\LazyScholarVault\lazyscholar.py' -Force
 Copy-Item 'D:\lazyscholar\app_shell.py' 'D:\LazyScholarVault\app_shell.py' -Force
+Copy-Item 'D:\lazyscholar\paper_reader.py' 'D:\LazyScholarVault\paper_reader.py' -Force
+Copy-Item 'D:\lazyscholar\paper_html.py' 'D:\LazyScholarVault\paper_html.py' -Force
 Copy-Item 'D:\lazyscholar\lazyscholar.ico' 'D:\LazyScholarVault\lazyscholar.ico' -Force
 Copy-Item 'D:\lazyscholar\vendor' 'D:\LazyScholarVault\vendor' -Recurse -Force
 Note 'vault synced'
 
 # 2b. v4 dependency: pystray (system tray). Harmless if already present.
-& 'C:\Users\ASUS\AppData\Local\Programs\Python\Python313\python.exe' -m pip install pystray 2>&1 | Out-File $log -Append -Encoding utf8
-Note 'pystray ensured'
+& 'C:\Users\ASUS\AppData\Local\Programs\Python\Python313\python.exe' -m pip install -r 'D:\lazyscholar\requirements.txt' 2>&1 | Out-File $log -Append -Encoding utf8
+Note 'app and reflow dependencies ensured'
 
 # 3. Rebuild the packaged app
 Remove-Item 'D:\lazyscholar\dist\LazyScholar.exe' -Force -ErrorAction SilentlyContinue
@@ -50,8 +52,10 @@ Compress-Archive -Path 'D:\lazyscholar\dist\LazyScholar.exe' -DestinationPath 'D
 Note "zip bytes: $((Get-Item 'D:\lazyscholar\LazyScholar-Windows.zip').Length)"
 
 # 5. Launch the new app and smoke-test it locally
-# Launch detached (WMI) so the app is not killed with this shell session.
-& 'D:\lazyscholar\launch-app.ps1' | ForEach-Object { Note $_ }
+# Launch detached (WMI) so the app is not killed with this shell session.
+
+& 'D:\lazyscholar\launch-app.ps1' | ForEach-Object { Note $_ }
+
 $healthy = $false
 for ($i = 0; $i -lt 30; $i++) {
   Start-Sleep 2

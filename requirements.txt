@@ -1,0 +1,7 @@
+pywebview
+pillow
+pystray
+pdfplumber>=0.11.10,<0.12
+beautifulsoup4>=4.13,<5
+bleach>=6.2,<7
+defusedxml>=0.7,<1

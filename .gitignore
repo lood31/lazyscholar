@@ -11,3 +11,25 @@ dist/
 LazyScholar-Windows.zip
 deploy-result.txt
 icon-preview.png
+
+# Generated QA screenshots, isolated test vaults and acceptance evidence
+/qa/
+/ci-vault/
+
+# Local handover snapshots and model weights
+/handover-pi (1)/
+*.gguf
+
+# Private runtime data, if the checkout is selected as a storage folder
+/inbox/
+/papers/
+/concepts/
+/processed/
+/daily/
+/papers_pdf/
+/reader/
+/html_reader/
+/highlights/
+/config.json
+/queue.json
+/preferences.json

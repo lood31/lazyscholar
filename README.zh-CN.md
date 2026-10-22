@@ -1,122 +1,178 @@
-# LazyScholar（懒人学者）
+# LazyScholar · 懒人学者
 
-**一个什么都不用你操心的知识管家。** 你只管把论文、链接、聊天记录丢进一个文件夹，剩下的交给后台进程：它自己去查元数据、让本地运行的 Gemma 写好结构化的精读笔记、归档进你的 Obsidian 库，你要做的只有——读。
+Windows 悬浮侧边栏 + 本地 llama.cpp 模型 + 论文阅读器。把 arXiv 论文加入队列，生成摘要导读，再用保留数学结构的原文页阅读、划线和局部擦除。
 
-我试过的效率工具都在要求我变得更自律。这个不一样：它对我没有任何要求。
+**本地推理 · 不用 Ollama · 不用付费模型 API · 不依赖 Obsidian**
 
-*[English](README.md) | 简体中文*
+[English](README.md) · [Windows 构建](https://github.com/lood31/lazyscholar/actions/workflows/build.yml) · [Releases](https://github.com/lood31/lazyscholar/releases)
 
-## 为什么做这个
+## 能做什么
 
-我每天晚上读一篇 AI 论文，也经常和 AI 深入讨论问题——但几天之后就忘掉大半，因为知识散落在聊天记录、PDF 和脑子里。我最初想做一个 Obsidian 插件，但插件还是要你粘链接、点按钮。那是"自律工具"，而自律工具最后都会被放弃。所以 LazyScholar 干脆把人从流程里彻底拿掉：知识自己归档自己。
+- 接收 arXiv 链接／编号，或文件名带 arXiv 编号的本地 PDF。
+- 通过本地 llama.cpp 和 Gemma／GGUF 模型生成精读导读，支持立即处理和定时处理。
+- 自动获取并缓存 arXiv HTML，正文重新排版、插图内嵌；原始 MathML 由本机 WebView2 排版，不让模型猜公式。
+- 调整字号，横向滚动超长公式，点击公式或插图放大。
+- 鼠标拖选文字新增划线；切换擦除模式后，只取消选中的划线部分。
+- 随时打开完整原版 PDF 对照。
+- 自选保存目录，不自动搬动旧文件。
 
-这两天还会上线一个"每日回放卡"：每天把 3 条旧笔记翻出来推到你面前，赶在遗忘之前重温。这个点子来自我以前给"AI 智能体的记忆系统"写的一份愿望清单——定时随机回放、在遗忘前浮现。LazyScholar 把我希望 AI 拥有的记忆系统，先给了我自己的笔记。
+## Windows 快速上手
 
-## 它是怎么工作的
+### 1. 准备程序和本地模型
 
+可以下载已有的 Windows Release，或打开对应提交的**成功** `build-windows` Actions 运行记录，下载 `LazyScholar-windows` 构建产物。解压后运行 `LazyScholar.exe`；Actions 产物中的程序位于 `dist/`。
+
+EXE **不需要安装 Python，也不依赖 Obsidian**，但需要：
+
+- Windows 和 Microsoft Edge **WebView2 Runtime**，用于桌面界面及原生 MathML 公式显示。
+- 自行准备本地 llama.cpp 和兼容的 **GGUF 模型文件**。本机用过 Gemma 3 4B Q4；速度与内存占用取决于硬件和模型大小。
+
+**注意启动器兼容性：**目前应用按 `llama serve -m <模型> -c <上下文> --port <端口>` 启动服务。「模型可执行文件」应选择支持该命令的 `llama` 启动器；不支持 `serve` 子命令的独立可执行文件不能直接替代。
+
+推送 `main` 会触发 Actions 构建；只有版本标签才触发 Release 发布。源码推送不等于已经发布了新的 Release，需等待对应构建成功。
+
+### 2. 首次配置
+
+1. 双击程序，点击悬浮球打开侧边栏。
+2. 在「设置／模型」填写 llama 可执行文件路径和 GGUF 模型路径，保存设置。
+3. 检查本地模型端口和上下文长度，默认分别为 **8080**、**16384**。
+4. 可在设置里选择保存目录。**退出并重启后生效，旧目录里的文件不会自动搬走。**
+
+可以在「模型」页手动开关服务。若本批处理由应用启动模型，处理结束后会自动停止该进程；已经在运行的外部服务不会被当作应用自己启动的进程关闭。
+
+### 3. 添加论文并生成导读
+
+在「队列」中添加：
+
+- arXiv 链接，例如 `https://arxiv.org/abs/2610.30130`；也可直接输入 `2610.30130`。
+- 文件名含 arXiv 编号的本地 PDF，例如 `2610.30130.pdf`。
+
+选择立即处理，或设置每天的处理时间。定时处理要求应用保持运行。失败时先查看队列上的错误，修正原因后重试，不必反复重复添加同一篇论文。
+
+完成后到「笔记」打开论文，可切换「原文」「导读」「原版 PDF」。
+
+## 原文阅读、划线和擦除
+
+### 阅读原文
+
+「原文」页会自动获取 arXiv HTML 并在本地缓存，**不用每篇手动保存网页**。`A− / A+` 调整字号，继续阅读时加载后续部分；长公式可以横向滚动，公式和插图可以点击放大。
+
+没有 HTML 版本或下载失败时，会显示错误和重试入口。此时可打开「原版 PDF」查看完整原文，不会偷偷用碎裂的 PDF 公式切图代替正常数学排版。
+
+### 新增划线
+
+1. 打开「原文」或「原版 PDF」。
+2. 点击「划线模式」。
+3. 鼠标拖选普通正文文字，松开后保存黄色标记。
+4. 再次点击退出划线模式，恢复普通文字选择和复制。
+
+### 只擦除选中的部分
+
+1. 点击「**擦除划线**」进入擦除模式。**按下按钮本身不会删除任何标注。**
+2. 拖选需要取消的黄色划线部分。
+3. 只擦选中范围与已有划线的交集：选中中间就保留两端，其他划线和未划线文字都不变。
+4. 再次点击「退出擦除」恢复普通选择。划线和擦除模式互斥。
+
+原文和 PDF 对照均支持局部擦除，保存后重开仍保留结果；HTML 文字标注也能在调整字号后保留。数学公式、图表图片和导读页暂不作为原文文字划线锚点。
+
+旧 PDF 文字标注只有在原句能唯一、精确匹配时才迁移到 HTML。原始标注文件会保留，不能匹配的原句可在阅读器查看，不会默默贴到另一句话上。
+
+## 保存位置、网络与隐私
+
+- 笔记和阅读数据存放在所选目录，常见子目录包括 `papers/`、`concepts/`、`papers_pdf/`、`html_reader/`、`reader/`、`highlights/`；应用配置和队列状态也保存在该目录。
+- 修改保存目录必须**退出重启**；不会自动迁移、删除或合并旧目录。
+- 显式 `--vault` 优先；`LAZYSCHOLAR_VAULT` 也会覆盖 GUI 保存的选择，应用会显示覆盖提示。
+- 模型推理在本地。arXiv 元数据及未缓存的 HTML／插图／PDF 仍需联网；已缓存的原文不需要每次重新下载。
+- 可选「HTML／插图代理」默认留空、沿用系统网络。需要显式代理时再填写，如 `http://127.0.0.1:<你的端口>`。该项只影响 HTML／插图，不影响本地模型，也不改变系统代理或 TUN 设置；不支持在 URL 中填写代理账号密码。
+- 下载的论文脚本和样式不会嵌入应用的特权页面，公式保留 MathML 结构并在本地排版。
+
+## 使用边界
+
+- **模型导读基于 arXiv 摘要，不等于模型精读了整篇 PDF。**全文阅读是独立的原文保真功能。
+- 部分论文没有 arXiv HTML 版本，请使用完整原版 PDF。
+- 不自动做数学 OCR，也不让模型「修补」或改写公式。
+- 桌面队列目前需要 arXiv 编号，不是通用的任意 PDF 导入工具。
+- 双向链接建议和每日回放不在本轮交付范围内。
+
+## 从源码运行
+
+已验证环境为 **Windows + Python 3.13**。在 PowerShell 中执行：
+
+```powershell
+git clone https://github.com/lood31/lazyscholar.git
+cd lazyscholar
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe lazyscholar.py --app
 ```
-inbox/ ──▶ 按类型分流 ──▶ 查元数据 ──▶ 本地 Gemma 写笔记 ──▶ 归档入库
-(你丢文件)              (arXiv API)                    (Obsidian 库)
+
+显式指定保存目录：
+
+```powershell
+.\.venv\Scripts\python.exe lazyscholar.py --app --vault "D:\MyScholarVault"
 ```
 
-1. **盯梢**——一个 Python 进程每 30 秒看一眼 `inbox/` 文件夹，只处理大小已经稳定不变的文件（还在复制中的文件绝不会被读一半）。
-2. **分流和查询**——文本文件里含 arXiv 链接、或文件名带 arXiv 编号的 PDF，会通过 arXiv API 查到标题、作者和摘要；其余 `.txt` / `.md` 文件一律当作讨论记录处理。
-3. **精读**——本地的 Gemma 模型（由 llama.cpp 提供服务）按固定模板写笔记：
-   - *论文* → 精读笔记：一句话总结、中文导读、核心要点、关键词汇中英对照、从摘要里挑一句跟读原句；
-   - *讨论记录* → 概念卡片：核心概念、要点提炼、值得追问的问题，原文附在卡片底部备查。
-4. **归档**——论文笔记进 `papers/`，概念卡片进 `concepts/`，处理过的源文件移进 `processed/`，每一步都记进 `lazyscholar.log`。
-5. **从不装死**——任何一步失败（比如 arXiv 限流、模型服务没开），文件就留在 `inbox/` 里，错误写进日志，并在 `daily/<日期>-errors.md` 里生成一张错误卡告诉你出了什么事。LazyScholar 永远不会伪造一篇笔记。
+只运行 HTTP 界面、不轮询收件箱：
 
-*即将上线：笔记之间的 `[[双向链接]]` 候选建议、每日回放卡。*
-
-## 应用界面
-
-LazyScholar 自带一个网页应用——**不依赖 Obsidian**。管家运行期间，在浏览器打开 `http://127.0.0.1:8765`：左侧边栏是收件箱状态、论文笔记和概念卡片，右侧把每篇笔记排成安静好读的一页，像一本小杂志。模型没在线？顶部的状态点会告诉你；今天有处理失败？会有横幅提醒你去看错误卡。这个应用和 Obsidian 读的是同一批文件，用哪个都行，也可以都用。
-
-只想开界面、不跑管家：`python lazyscholar.py --vault <路径> --ui`。
-
-## 丢什么进去，会得到什么
-
-| 你丢进 `inbox/` 的 | 你得到的 | 在哪 |
-| --- | --- | --- |
-| 含 arXiv 链接的 `.txt` 文件，如 `https://arxiv.org/abs/2510.16720` | 一篇结构化精读笔记（总结 / 导读 / 要点 / 词汇 / 跟读句）+ 摘要原文 | `papers/<编号>-<标题>.md` |
-| 文件名带 arXiv 编号的 PDF，如 `2510.16720.pdf` | 同样的精读笔记（v1 读的是元数据和摘要，PDF 本体只归档，暂不解析全文） | `papers/<编号>-<标题>.md`，PDF 进 `processed/` |
-| 讨论 / 聊天记录（`.md` 或 `.txt`，不含 arXiv 链接） | 一张概念卡片：核心概念、要点提炼、值得追问的问题，附原文 | `concepts/<原文件名>.md` |
-| 其他任何文件 | 原封不动留在 `inbox/`，日志里会说明 | — |
-| （处理失败时） | 文件留在 `inbox/`，错误卡说明原因 | `daily/<日期>-errors.md` |
-
-## 环境要求
-
-- **Python 3.11 或更高**——只用标准库，不需要 `pip install` 任何东西。
-- **llama.cpp** + 任意较新的 Gemma GGUF 模型（开发与测试使用 Gemma 3 4B IT QAT 的 Q4_0 量化，约 2.4 GB）。
-- **一个文件夹当仓库**——用 Obsidian 打开体验最好，但本质上它只是往文件夹里写 Markdown。
-- 在 Windows 11 上开发；脚本本身是跨平台的纯 Python。
-
-## 安装与启动
-
-**第 1 步：下载模型**（llama.cpp 桌面版或命令行均可）：
-
-```bash
-llama download -hf ggml-org/gemma-3-4b-it-qat-GGUF:Q4_0
+```powershell
+.\.venv\Scripts\python.exe lazyscholar.py --ui --vault "D:\MyScholarVault"
 ```
 
-**第 2 步：启动模型服务**——LazyScholar 工作期间需要它一直开着：
+然后打开 `http://127.0.0.1:8765/app`。原生托盘和文件／目录选择对话框需要桌面模式。旧命令行收件箱轮询参数可通过 `--help` 查看，与桌面队列不是同一条入口。
 
-```bash
-llama serve -m /模型路径/gemma-3-4b-it-qat-Q4_0.gguf -c 16384 --port 8080
+### 构建 EXE
+
+在仓库根目录，安装运行依赖后执行：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install pyinstaller
+.\.venv\Scripts\python.exe -m PyInstaller --noconfirm --windowed --onefile --name LazyScholar --icon lazyscholar.ico --collect-all webview --collect-all pystray --collect-all pdfplumber --collect-all pdfminer --collect-all pypdfium2 --collect-all bleach --collect-all bs4 --collect-all defusedxml --add-data "vendor;vendor" --add-data "lazyscholar.ico;." lazyscholar.py
 ```
 
-`-c 16384` 很重要：llama.cpp 的预设上下文常常只有 4096 token，长输入会被悄悄截断。端口可以任意改，只要和第 3 步的配置对上（见"配置"一节）。
-
-**第 3 步：启动管家**：
-
-```bash
-python lazyscholar.py --vault /你的仓库路径
-```
-
-仓库里的五个文件夹（`inbox/`、`processed/`、`papers/`、`concepts/`、`daily/`）会在首次运行时自动创建。加上 `--once` 参数可以只处理一轮当前 inbox 就退出，适合测试。在 Windows 上，把 `start-lazyscholar.bat` 里的路径改成你自己的，双击就能同时拉起模型服务和管家。
-
-**第 4 步：往 `inbox/` 里丢一个文件**，然后看 `lazyscholar.log`。大约一分钟内，笔记就会出现在 `papers/` 或 `concepts/` 里。
-
-## 日常使用
-
-你永远只需要做三件事：
-
-1. **丢**——把论文链接、PDF、聊天记录存进 `inbox/`。不管你从哪看到的：分享菜单、下载文件夹、导出的聊天记录——只要文件落在这个文件夹里，它就会被归档。
-2. **读**——想看的时候打开仓库。笔记已经写好、排好版，就是你每晚精读的那个格式。
-3. **瞄一眼错误卡**——如果 `daily/` 里有 errors 卡，说明有事需要你（通常是模型服务没开，或者 arXiv 让你慢一点）。任何东西都不会悄无声息地消失。
-
-## 配置
-
-| 设置项 | 怎么改 | 默认值 |
-| --- | --- | --- |
-| 模型服务地址 | 环境变量 `LAZYSCHOLAR_LLAMA` | `http://127.0.0.1:8080` |
-| 发给服务端的模型名 | 环境变量 `LAZYSCHOLAR_MODEL` | `gemma-3-4b-it-qat-Q4_0` |
-| 轮询间隔 | `--interval <秒>` | `30` |
-| 只跑一轮就退出 | `--once` | 关（常驻运行） |
-
-想用 llama.cpp 桌面版自带的服务？它默认监听 `http://127.0.0.1:9931`——把 `LAZYSCHOLAR_LLAMA` 设成这个地址，就可以跳过第 2 步。
+输出为 `dist/LazyScholar.exe`。EXE 包含所需 Python 依赖，但不包含 GGUF 模型和系统 WebView2 运行时。旧的 `build-app.cmd`／`deploy-v2.ps1` 带有维护者电脑上的固定路径；其他机器请使用上述通用命令。
 
 ## 常见问题
 
-| 现象 | 原因 | 怎么办 |
-| --- | --- | --- |
-| 错误卡写着 `Connection refused` / `WinError 10061` | 模型服务没在运行 | 启动 `llama serve`（第 2 步），然后什么都不用做——文件还在 `inbox/` 里，会自动重试 |
-| 错误卡写着 `HTTP Error 429` | arXiv 把你的 IP 限流了（校园网共用出口很常见） | 不用管：LazyScholar 已经带退避重试；实在失败，文件会留在 `inbox/` 等下一轮 |
-| 文件一直躺在 `inbox/` 里 | 还在复制中、类型不支持、或者管家没在运行 | 看 `lazyscholar.log`，里面写了确切原因 |
-| 笔记某个栏目写得有点飘 | 4B 小模型在自由发挥 | 每篇笔记底部都附了摘要 / 原文，照着核对即可；也可以改 `lazyscholar.py` 里的提示词模板 |
+| 情况 | 检查方法 |
+| --- | --- |
+| 模型无法启动 | 检查启动器／模型路径、`llama serve` 是否可用、端口占用，以及保存目录中的 `model-server.log`。 |
+| 论文处理失败 | 检查 arXiv 编号、网络和队列错误提示后重试；本地 PDF 文件名需带编号。 |
+| HTML 获取失败 | 重试，检查可选 HTML 代理，或打开原版 PDF；并非每篇论文都有 HTML。 |
+| 更换目录后仍看到旧目录 | 退出重启，检查是否被 `--vault`／`LAZYSCHOLAR_VAULT` 覆盖；旧文件不会自动搬动。 |
+| 选中文字时总在新增或擦除标记 | 先退出「划线模式／擦除模式」，再普通拖选复制。 |
+| 界面或公式不正常显示 | 检查 WebView2 Runtime 是否安装并保持更新。 |
 
-## 设计原则
+## 开发与测试
 
-- **只用本地与开源**——本地跑开源权重模型，没有 API 密钥、不上云；私人阅读记录不出这台机器，宿舍 Wi-Fi 再烂也不影响。
-- **零持续成本**——学生预算，经不起 API 账单。
-- **诚实报错**——错误一定上卡片、绝不吞掉；只有模型真的写了，才会有笔记。
-- **只用标准库**——Python 能跑的地方，LazyScholar 就能跑，没有依赖地狱。
+以下命令使用安装依赖的同一个 Python 环境；若未激活虚拟环境，将 `python` 替换为 `.\.venv\Scripts\python.exe`。
 
-## 项目状态
+离线后端与提取器测试：
 
-为 DEV Hacktoberfest 2026 第三周挑战（主题 "Slow and Steady"）而作。端到端生成已在目标机器上验证通过（2026-10-20）：丢入一篇 arXiv 论文链接，产出完整精读笔记；丢入一段讨论记录，产出概念卡片；源文件自动归档，全程零手动步骤。内置侧边栏网页应用已于当晚上线，并用真实笔记验证通过。本周剩余：`[[双向链接]]` 建议与每日回放卡，然后是 DEV 参赛文章。
+```powershell
+python -B scripts/test_app_backend.py
+python -B scripts/test_paper_reader.py
+python -B scripts/test_paper_html.py
+```
 
-## 许可证
+浏览器回归另外需要 Playwright 和 Chromium：
 
-MIT
+```powershell
+python -m pip install playwright
+python -m playwright install chromium
+python -B scripts/test_reader_browser.py
+python -B scripts/test_highlight_eraser.py
+```
+
+Windows 真实鼠标验收使用隔离测试目录，会短暂移动并恢复鼠标。请让测试窗口保持前台，暂时停止手动操作：
+
+```powershell
+python -B scripts/test_native_highlight.py --exe dist/LazyScholar.exe --focus-wait 60
+```
+
+后端／浏览器回归、原生 MathML、真实 Windows 鼠标划线和局部擦除均已在本机验证。浏览器脚本创建选区不能冒充原生输入验收；QA 输出、私人笔记、模型权重和交接快照不随源码上传。
+
+## 项目与许可证
+
+为 DEV Hacktoberfest 2026 第三周 **Slow and Steady** 而作：做一个小而私密的学习助手，而不是云端知识平台。
+
+应用代码使用 [MIT 许可证](LICENSE)。llama.cpp、模型权重和捆绑的第三方组件分别遵循其各自许可证。
