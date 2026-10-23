@@ -1,4 +1,5 @@
 __pycache__/
+.venv/
 *.log
 .DS_Store
 
@@ -30,6 +31,8 @@ icon-preview.png
 /reader/
 /html_reader/
 /highlights/
+/fulltext/
 /config.json
 /queue.json
 /preferences.json
+/.paper-trash/

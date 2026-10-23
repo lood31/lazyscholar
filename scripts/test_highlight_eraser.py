@@ -141,7 +141,7 @@ def main():
                 check(math.isclose(sum(h["w"] * h["h"] for h in parts if h["page"] == 1), .26), "PDF subtraction changed the wrong area")
                 pdf_url = ApiTests.base + "/api/highlights?id=2510.16720"
                 other = {"page": 2, "x": .1, "y": .1, "w": .2, "h": .02}
-                response = page.request.post(pdf_url, data={"highlights": [other]})
+                response = page.request.post(pdf_url, data={"highlights": [other], "revision": page.request.get(pdf_url).json()["revision"]})
                 check(response.ok, "Cannot seed the unrelated PDF annotation")
                 page.locator("#btn-reader-pdf").click()
                 page.wait_for_function("pdfLoaded && !document.querySelector('#btn-hl').disabled")

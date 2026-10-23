@@ -27,11 +27,18 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt pyinstaller
 
-      - name: Backend and reflow regressions
+      - name: Offline backend, source, language and lifecycle regressions
         run: |
-          python -B scripts/test_app_backend.py
-          python -B scripts/test_paper_reader.py
-          python -B scripts/test_paper_html.py
+          $tests = @(
+            'scripts/test_app_backend.py', 'scripts/test_paper_reader.py',
+            'scripts/test_paper_html.py', 'scripts/test_saved_html.py',
+            'scripts/test_fulltext.py', 'scripts/test_generation_language.py',
+            'scripts/test_paper_trash.py'
+          )
+          foreach ($test in $tests) {
+            python -B $test
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
       - name: Build single-file exe
         run: >
@@ -78,3 +85,6 @@ jobs:
         with:
           files: dist/LazyScholar.exe
           generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          # Preserve a manually uploaded and verified EXE instead of replacing it with a CI rebuild.
+          overwrite_files: false

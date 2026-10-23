@@ -31,6 +31,8 @@ VERSION = 1
 MAX_HTML = 5 * 1024 * 1024
 MAX_IMAGE = 12 * 1024 * 1024
 ID_RE = re.compile(r"\d{4}\.\d{4,5}(?:v\d+)?")
+# Saved webpages are cache-only: these IDs must never enter the arXiv downloader.
+LOCAL_ID_RE = re.compile(r"local-[a-f0-9]{24}")
 PREFIX = "ls-source-"
 _LOCKS = {}
 _LOCKS_GUARD = threading.Lock()
@@ -52,6 +54,21 @@ BLOCK_TAGS = {"div", "section", "p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "
 
 class HtmlUnavailable(ValueError):
     pass
+
+
+class AnnotationConflict(ValueError):
+    pass
+
+
+def versioned_annotations(data: dict) -> dict:
+    state = {key: value for key, value in data.items() if key != "revision"}
+    encoded = json.dumps(state, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return {**state, "revision": hashlib.sha256(encoded).hexdigest()}
+
+
+def check_annotation_revision(data: dict, current: dict, required=False) -> None:
+    if (required or "revision" in data) and data.get("revision") != current["revision"]:
+        raise AnnotationConflict("标注已被其他窗口更新，请读取最新版本后重试")
 
 
 def _lock(root: Path):
@@ -153,18 +170,25 @@ def _units(node: Tag, soup: BeautifulSoup):
                 yield child
 
 
-def prepare_document(data: bytes, arxiv_id: str, source_url: str) -> dict:
-    if not ID_RE.fullmatch(arxiv_id) or len(data) > MAX_HTML:
+def valid_document_id(value: str) -> bool:
+    return bool(ID_RE.fullmatch(value) or LOCAL_ID_RE.fullmatch(value))
+
+
+def prepare_document(data: bytes, arxiv_id: str, source_url: str, *, local=False) -> dict:
+    valid = LOCAL_ID_RE.fullmatch(arxiv_id) if local else ID_RE.fullmatch(arxiv_id)
+    if not valid or len(data) > MAX_HTML:
         raise HtmlUnavailable("论文编号无效或 HTML 过大")
-    _origin(source_url)
+    if not local:
+        _origin(source_url)
     soup = BeautifulSoup(data.decode("utf-8-sig"), "html.parser")
     article = soup.select_one("article.ltx_document")
     if article is None:
         raise HtmlUnavailable("响应不是 arXiv HTML 正文，可能是错误页或验证页")
     title = soup.title.get_text(" ", strip=True) if soup.title else arxiv_id
     base = soup.find("base", href=True)
-    base_url = urllib.parse.urljoin(source_url, str(base["href"])) if base else source_url
-    _origin(base_url)
+    base_url = urllib.parse.urljoin(source_url, str(base["href"])) if base and not local else source_url
+    if not local:
+        _origin(base_url)
     for bad in list(article.find_all(["script", "style", "noscript", "iframe", "object", "embed", "form", "input", "button", "link", "meta", "base", "svg"])):
         bad.decompose()
     cleaned = bleach.clean(str(article), tags=HTML_TAGS | MATH_TAGS, attributes=_attributes,
@@ -201,6 +225,15 @@ def prepare_document(data: bytes, arxiv_id: str, source_url: str) -> dict:
             else:
                 tag.attrs.pop("href", None)
         if tag.name == "img":
+            if local:
+                key = str(tag.get("src", "")).removeprefix("/saved-image/")
+                if not re.fullmatch(r"[a-f0-9]{24}", key):
+                    tag.replace_with(safe.new_string("[插图未能导入，请对照原网页]"))
+                    continue
+                images[key] = "local"
+                tag["src"] = "/api/paper/html-image?id=" + arxiv_id + "&name=" + key
+                tag["loading"] = "lazy"
+                continue
             target = urllib.parse.urljoin(base_url, str(tag.get("src", "")))
             try:
                 _origin(target)
@@ -286,15 +319,17 @@ def store_document(root: Path, data: bytes, arxiv_id: str, source_url: str) -> d
 
 
 def get_document(root: Path, arxiv_id: str, proxy="", refresh=False) -> dict:
-    if not ID_RE.fullmatch(arxiv_id):
+    if not valid_document_id(arxiv_id):
         raise HtmlUnavailable("论文编号无效")
     with _lock(root):
         path = root / "article.json"
-        if path.exists() and not refresh:
+        if path.exists() and (not refresh or LOCAL_ID_RE.fullmatch(arxiv_id)):
             stat = path.stat()
             document = _read_index(str(path), stat.st_mtime_ns, stat.st_size)
             if document.get("format") == VERSION and document.get("id") == arxiv_id:
                 return document
+        if LOCAL_ID_RE.fullmatch(arxiv_id):
+            raise HtmlUnavailable("本地 HTML 缓存缺失或版本无效，请重新导入；不会联网补全文")
         try:
             data, final, kind = _download(f"https://arxiv.org/html/{arxiv_id}", proxy, MAX_HTML)
             if kind not in ("text/html", "application/xhtml+xml"):
@@ -315,7 +350,9 @@ def get_page(root: Path, arxiv_id: str, number: int, proxy="", refresh=False) ->
         raise ValueError("原文部分编号超出范围")
     chunk = document["chunks"][number - 1]
     return {"page": number, "pages": len(document["chunks"]), "source": document["source"],
-            "source_kind": "html", "source_url": document["source_url"], "math_count": document["math_count"],
+            "source_kind": "saved-html" if LOCAL_ID_RE.fullmatch(arxiv_id) else "html",
+            "warnings": document.get("warnings", []),
+            "source_url": document["source_url"], "math_count": document["math_count"],
             "blocks": [{"kind": "html", **chunk}], "scanned": False}
 
 
@@ -332,6 +369,8 @@ def get_image(root: Path, arxiv_id: str, name: str, proxy="") -> tuple[bytes, st
             return png.read_bytes(), "image/png"
         if svg.exists():
             return svg.read_bytes(), "image/svg+xml"
+        if LOCAL_ID_RE.fullmatch(arxiv_id):
+            raise ValueError("本地插图缓存缺失，请重新导入；未自动访问原网站")
         data, _, kind = _download(url, proxy, MAX_IMAGE)
         if kind == "image/svg+xml":
             text = data.decode("utf-8-sig")
@@ -378,7 +417,7 @@ def load_highlights(root: Path, document: dict, legacy: Path | None = None) -> d
             if (not isinstance(result, dict) or not isinstance(result.get("highlights"), list)
                     or not isinstance(result.get("legacy_unresolved", []), list)):
                 raise ValueError("HTML 划线文件格式无效")
-            return {"source": document["source"], **result}
+            return versioned_annotations({"source": document["source"], **result})
         result = {"highlights": [], "legacy_unresolved": []}
         if legacy is not None and legacy.exists():
             try:
@@ -404,13 +443,15 @@ def load_highlights(root: Path, document: dict, legacy: Path | None = None) -> d
                                                      "end": len(run["text"][:last].encode("utf-16-le")) // 2,
                                                      "quote": run["text"][first:last]})
             _json(path, result)
-        return {"source": document["source"], **result}
+        return versioned_annotations({"source": document["source"], **result})
 
 
-def save_highlights(root: Path, document: dict, data: dict, legacy: Path | None = None) -> dict:
+def save_highlights(root: Path, document: dict, data: dict, legacy: Path | None = None, *, require_revision=False) -> dict:
     with _lock(root):
         if data.get("source") != document["source"]:
             raise ValueError("原文来源已改变，请重新打开后再划线")
+        previous = load_highlights(root, document, legacy)
+        check_annotation_revision(data, previous, require_revision)
         rows = data.get("highlights")
         if not isinstance(rows, list) or len(rows) > 5000:
             raise ValueError("划线片段数量必须在 0–5000 之间")
@@ -424,7 +465,6 @@ def save_highlights(root: Path, document: dict, data: dict, legacy: Path | None 
                 raise ValueError("划线范围无效")
             if text[first * 2:last * 2].decode("utf-16-le") != row.get("quote"):
                 raise ValueError("划线与原文不一致")
-        previous = load_highlights(root, document, legacy)
         result = {"highlights": rows, "legacy_unresolved": previous.get("legacy_unresolved", [])}
         _json(_annotation_path(root, document), result)
-        return {"source": document["source"], **result}
+        return versioned_annotations({"source": document["source"], **result})
