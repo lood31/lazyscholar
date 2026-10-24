@@ -52,7 +52,7 @@ import urllib.parse
 import urllib.request
 import uuid
 import xml.etree.ElementTree as ET
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -98,10 +98,12 @@ def fetch_arxiv(arxiv_id: str, attempts: int = 3) -> dict:
     last_exc = None
     for i in range(attempts):
         try:
+            # pi-lens-ignore: S310
             req = urllib.request.Request(
                 ARXIV_API.format(arxiv_id),
                 headers={"User-Agent": "LazyScholar/0.2 (personal research tool)"},
             )
+            # pi-lens-ignore: S310
             with urllib.request.urlopen(req, timeout=30) as resp:
                 raw = resp.read(2 * 1024 * 1024 + 1)
             if len(raw) > 2 * 1024 * 1024:
@@ -109,6 +111,7 @@ def fetch_arxiv(arxiv_id: str, attempts: int = 3) -> dict:
             xml = raw.decode("utf-8-sig")
             if "<!DOCTYPE" in xml.upper() or "<!ENTITY" in xml.upper():
                 raise ValueError("arXiv metadata must not contain DTDs or entities")
+            # pi-lens-ignore: S314
             root = ET.fromstring(xml)
             entry = root.find("a:entry", ATOM)
             if entry is None:
@@ -140,12 +143,14 @@ def llm_chat(system: str, user: str, max_tokens: int = 1400) -> str:
         "temperature": 0.3,
         "max_tokens": max_tokens,
     }
+    # pi-lens-ignore: S310
     req = urllib.request.Request(
         LLAMA_BASE + "/v1/chat/completions",
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
+    # pi-lens-ignore: S310
     with urllib.request.urlopen(req, timeout=LLM_TIMEOUT) as resp:
         try:
             data = json.loads(resp.read())
@@ -561,6 +566,7 @@ def vault_state(vault: Path, *, check_model: bool = True) -> dict:
     llama_up = False
     if check_model:
         try:
+            # pi-lens-ignore: S310
             with urllib.request.urlopen(LLAMA_BASE + "/health", timeout=1.5) as r:
                 llama_up = r.status == 200
         except Exception:
@@ -850,6 +856,28 @@ def add_queue_item(vault: Path, kind: str, value: str) -> dict:
     return item
 
 
+@contextmanager
+def changing_paper(vault: Path):
+    if not _batch_lock.acquire(blocking=False):
+        raise paper_trash.Busy("正在生成导读，请完成后再操作")
+    try:
+        with paper_trash.changing(vault), _queue_lock:
+            yield
+    finally:
+        _batch_lock.release()
+
+
+def reconcile_deleted(vault: Path) -> list:
+    # Only receipt/queue metadata changes; restored files are never moved here.
+    if not _batch_lock.acquire(blocking=False):
+        return []
+    try:
+        with _queue_lock:
+            return paper_trash.reconcile(vault, load_queue(vault), lambda values: save_queue(vault, values))
+    finally:
+        _batch_lock.release()
+
+
 def active_queue(vault: Path) -> list:
     deleted = paper_trash.deleted_ids(vault)
     return [item for item in load_queue(vault) if paper_trash.queue_id(item) not in deleted]
@@ -865,7 +893,7 @@ def queue_reading_info(vault: Path, item_id: str) -> dict:
             raise ValueError("本地网页编号无效")
         paper_trash.ensure_active(vault, paper_id)
         return {"paper_id": paper_id, "arxiv": None, "title": item.get("label", paper_id),
-                "view": "paper", "note": item.get("note")}
+                "view": "paper", "note": item.get("note"), "lifecycle": paper_trash.lifecycle_epoch(vault, paper_id)}
     source = item.get("label", "") if item["kind"] == "pdf" else item["value"]
     match = ARXIV_ID_RE.search(source)
     if not match:
@@ -875,7 +903,8 @@ def queue_reading_info(vault: Path, item_id: str) -> dict:
     if not isinstance(note, str) or Path(note).name != note or not (vault / "papers" / note).is_file():
         note = None
     return {"arxiv": match.group(1), "title": item.get("label") or source,
-            "view": "pdf" if item["kind"] == "pdf" else "paper", "note": note}
+            "view": "pdf" if item["kind"] == "pdf" else "paper", "note": note,
+            "lifecycle": paper_trash.lifecycle_epoch(vault, match.group(1))}
 
 
 def reader_window_url(params: dict) -> str:
@@ -1186,6 +1215,7 @@ def get_pdf_path(vault: Path, arxiv_id: str) -> Path:
         req = urllib.request.Request(
             f"https://arxiv.org/pdf/{arxiv_id}",
             headers={"User-Agent": "LazyScholar/0.2 (personal research tool)"})
+        # pi-lens-ignore: S310
         with urllib.request.urlopen(req, timeout=90) as resp:
             data = resp.read()
         if not data.startswith(b"%PDF"):
@@ -1320,7 +1350,29 @@ APP_PAGE = r"""<!DOCTYPE html>
   }
   .qitem .ttl{font-weight:600; font-size:14px; word-break:break-all;}
   .qitem .meta, .note .meta{color:var(--muted); font-size:12px; margin-top:3px;}
-  .qitem .del{float:right; border:0; background:none; color:var(--muted); cursor:pointer; font-size:12px; font-family:inherit;}
+  .list-toolbar{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;}
+  .list-toolbar h2{margin:0; min-width:0;}
+  .list-actions{display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-left:auto;}
+  button.btn.list-action{display:inline-flex; align-items:center; justify-content:center; gap:5px; font-size:13px; line-height:1.35; padding:7px 10px; border-radius:10px; min-width:0;}
+  button.btn[hidden]{display:none !important;}
+  body button.btn.danger{background:#b6424e; color:#fff; border:1px solid transparent;}
+  .selectable{position:relative; padding-left:44px;}
+  .paper-radio{position:absolute; left:15px; top:19px; width:16px; height:16px; margin:0; accent-color:var(--copper); cursor:pointer;}
+  .paper-selected{outline:2px solid var(--copper); outline-offset:-2px;}
+  .paper-repair{display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:10px; margin:8px 0; border:1px solid var(--line); border-radius:10px; font-size:12px; color:var(--muted);}
+  .paper-repair[hidden]{display:none;}
+  #paper-action-dialog{box-sizing:border-box; width:min(340px,calc(100vw - 32px)); max-width:calc(100vw - 32px); max-height:76vh; inset:0; margin:auto; padding:20px; overflow:auto; background:var(--card); color:var(--fg); border:1px solid var(--line); border-radius:16px; box-shadow:0 18px 50px #0003;}
+  #paper-action-dialog::backdrop{background:#14233b55;}
+  #paper-action-dialog h3{margin:0 0 10px; font-size:17px;}
+  #paper-action-subject{display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; overflow-wrap:anywhere; font-size:14px; font-weight:600; margin:0 0 10px;}
+  #paper-action-subject:empty,#paper-action-count:empty{display:none;}
+  #paper-action-message{font-size:13px; line-height:1.65; margin:0; overflow-wrap:anywhere;}
+  #paper-action-count{font-size:12px; color:var(--muted); margin:10px 0 0;}
+  .paper-action-buttons{display:flex; justify-content:flex-end; flex-wrap:wrap; gap:8px; margin-top:18px;}
+  #paper-action-choices{max-height:28vh; overflow:auto;}
+  .repair-choice{display:flex; align-items:flex-start; gap:8px; font-size:13px; margin:10px 0; overflow-wrap:anywhere;}
+  .repair-choice input{width:15px; height:15px; flex:none; margin-top:3px; accent-color:var(--copper);}
+  .repair-choice small{display:block; color:var(--muted); font-size:11px;}
   .st{font-weight:600;}
   .st-pending{color:var(--muted);} .st-processing{color:var(--copper);}
   .st-done{color:#3FA46A;} .st-failed{color:#C0392B;}
@@ -1426,7 +1478,7 @@ APP_PAGE = r"""<!DOCTYPE html>
   </header>
   <main class="panel">
     <section class="page active" id="page-queue">
-      <h2 data-i18n="q_title">论文队列</h2>
+      <div class="list-toolbar"><h2 data-i18n="q_title">论文队列</h2><div class="list-actions"><button class="btn ghost list-action" id="delete-queue" type="button"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg><span data-i18n="delete_start">删除</span></button><button class="btn ghost list-action" id="delete-queue-cancel" type="button" data-i18n="delete_cancel" hidden>取消</button><button class="btn danger list-action" id="delete-queue-selected" type="button" data-i18n="delete_selected" hidden disabled>删除所选</button></div></div>
       <p class="sub" data-i18n="q_sub">把论文先排队，不用等。每天 <b>23:30</b> 管家会自己把模型打开、批量处理完再关掉；等不及点「立即处理」。</p>
       <div class="card">
         <div class="row">
@@ -1443,9 +1495,9 @@ APP_PAGE = r"""<!DOCTYPE html>
     </section>
 
     <section class="page" id="page-notes">
-      <h2 data-i18n="n_title">笔记卡片</h2>
+      <div class="list-toolbar"><h2 data-i18n="n_title">笔记卡片</h2><div class="list-actions"><button class="btn ghost list-action" id="delete-notes" type="button"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg><span data-i18n="delete_start">删除</span></button><button class="btn ghost list-action" id="delete-notes-cancel" type="button" data-i18n="delete_cancel" hidden>取消</button><button class="btn danger list-action" id="delete-notes-selected" type="button" data-i18n="delete_selected" hidden disabled>删除所选</button></div></div>
       <p class="sub" data-i18n="n_sub">管家生成的精读笔记与概念卡都在这里，点开可读论文原文并划线。</p>
-      <button class="btn ghost" id="btn-paper-trash" type="button">回收站</button>
+      <div id="paper-repair" class="paper-repair" hidden><span id="paper-repair-text"></span><button class="btn ghost list-action" id="paper-repair-button" type="button">处理记录</button></div>
       <input type="text" id="n-search" data-i18n-ph="n_ph" placeholder="搜索标题或关键词…">
       <div id="nlist" style="margin-top:14px;"></div>
     </section>
@@ -1566,6 +1618,7 @@ APP_PAGE = r"""<!DOCTYPE html>
     <div id="note-body"><div class="md" id="note-md"></div></div>
   </div>
 
+<dialog id="paper-action-dialog" aria-labelledby="paper-action-title"><h3 id="paper-action-title"></h3><p id="paper-action-subject"></p><p id="paper-action-message"></p><p id="paper-action-count"></p><div id="paper-action-choices"></div><div class="paper-action-buttons"><button class="btn ghost list-action" id="paper-action-cancel" type="button">取消</button><button class="btn danger list-action" id="paper-action-confirm" type="button">移入系统回收站</button></div></dialog>
 <dialog id="math-zoom"><button class="btn" id="math-zoom-close" data-i18n="r_close">关闭</button><div id="math-zoom-body" class="source-html"></div></dialog>
 <dialog id="legacy-dialog"><button class="btn" id="legacy-close" data-i18n="r_close">关闭</button><p class="sub" data-i18n="legacy_hint">以下旧标注无法唯一匹配到 HTML，原始数据仍保留。</p><div id="legacy-items"></div></dialog>
 <dialog id="image-zoom"><button class="btn" id="zoom-close" data-i18n="r_close">关闭</button><div><img id="zoom-image" alt="原文图表与公式"></div></dialog>
@@ -1578,14 +1631,19 @@ const standaloneReader = readerParams.has('reader');
 document.body.classList.toggle('reader-window', standaloneReader);
 let settingsLoaded = false, scheduleTime = '23:30', messageTimer;
 async function api(url, options){
+  if (/^\/api\/(reading-)?highlights\?/.test(url)) {
+    const headers = {...(options?.headers || {})};
+    if (!Object.hasOwn(headers,'X-Paper-Lifecycle')) headers['X-Paper-Lifecycle'] = curLifecycle;
+    options = {...options,headers};
+  }
   const response = await fetch(url, options);
   const data = await response.json().catch(() => { throw Error('HTTP ' + response.status); });
   if (!response.ok || data.ok === false) {
-    const error = Error(data.msg || ('HTTP ' + response.status)); error.status = response.status; throw error;
+    const error = Error(data.msg || ('HTTP ' + response.status)); error.status = response.status; error.data = data; throw error;
   }
   return data;
 }
-const post = (url,body={}) => api(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+const post = (url,body={},options={}) => api(url,{...options,method:'POST',headers:{'Content-Type':'application/json',...(options.headers || {})},body:JSON.stringify(body)});
 function showMessage(message, error=false){
   const box = $('#app-message');
   box.textContent = message; box.classList.toggle('error',error); box.hidden = false;
@@ -1613,10 +1671,45 @@ zh: {
   note_missing:'尚未生成导读。可返回队列手动或定时生成；阅读和划线不受影响。',
   r_expand:'大窗口阅读', pdf_fit:'适宽', pdf_smaller:'缩小 PDF', pdf_larger:'放大 PDF',
   st_pending:'排队中', st_processing:'处理中', st_done:'完成', st_failed:'失败', del:'删除',
-  trash_title:'论文回收站', trash_open:'回收站', trash_back:'返回笔记', trash_paper:'移入回收站',
-  trash_restore:'恢复', trash_empty:'回收站是空的', trash_done:'论文已移入回收站，可恢复。', trash_restored:'论文已恢复。',
-  trash_hint:'导读、应用内原文缓存与标注均保留在回收站。恢复不会覆盖同名文件；外部原始文件不受影响。',
-  trash_confirm:'将该论文的全部导读、应用内原文缓存和标注移入回收站？可以恢复，外部原始文件不会改动。',
+  delete_choose:"选择一篇论文",
+  delete_choose_hint:"点选一篇，再确认删除；取消或 Esc 可退出选择。",
+  delete_start:"删除",
+  delete_cancel:"取消",
+  delete_selected:"删除所选",
+  delete_title:"删除这篇论文？",
+  delete_confirm:"移入系统回收站",
+  delete_hint:"导读、原文缓存和标注将交给 Windows 回收站。外部原始文件不受影响，可在系统回收站还原。",
+  delete_count:"将回收 {n} 项文件或目录",
+  delete_queue_only:"这条队列记录尚无本地文件。本次仅移除记录，系统回收站不会有可还原的文件。",
+  delete_remove:"移除记录",
+  delete_queue_done:"队列记录已移除。",
+  delete_working:"正在交给 Windows 回收站…",
+  delete_done:"已移入 Windows 系统回收站。",
+  delete_receipt_failed:"确认回收 {done} 项，原处剩余 {left} 项。收据保存失败：请在 Windows 回收站核实或还原，修复保存目录后刷新；暂勿重复删除。",
+  delete_metadata_failed:"文件已回收，但状态保存失败。请修复保存目录后重试收尾。",
+  delete_partial_title:"删除未全部完成",
+  delete_partial:"系统已确认回收 {done} 项，剩余 {left} 项仍在原位。请核实系统回收站；不会改用永久删除。",
+  delete_ok:"知道了",
+  restore_pending:"系统还原未完成或存在冲突",
+  restore_pending_title:"请核实已还原的文件",
+  restore_pending_hint:"已还原的文件保持原样。请在 Windows 回收站还原剩余项目；若内容已修改或队列存在冲突，可明确重新导入当前来源，不会自动覆盖文件。",
+  delete_retry:"重试剩余",
+  delete_confirm_open:"请先处理当前确认框。",
+  delete_unfinished:"未完成的删除",
+  delete_finish:"完成状态更新",
+  delete_finish_hint:"文件已交给系统回收站，本次只完成队列状态更新，不再移动文件。",
+  reimport_title:"重新导入这篇论文？",
+  reimport_hint:"将使用当前选择的来源重新激活论文。未从系统回收站还原的标注不会自动找回；已有不同内容不会被覆盖。",
+  reimport_confirm:"重新导入",
+  repair_title:"处理遗留记录",
+  repair_hint:"请选择一条记录。旧版数据只有在你明确恢复后才会移动；新删除不会再另存论文副本。",
+  repair_notice:"有 {n} 条旧版或未完成记录，数据仍受保护。",
+  repair_choose:"处理记录",
+  legacy_record:"旧版遗留数据",
+  legacy_restore_title:"恢复这条旧版记录？",
+  legacy_restore_hint:"恢复到原保存位置，不覆盖现有文件。取回后可通过新的删除入口交给 Windows 回收站。",
+  legacy_restore:"恢复旧数据",
+  legacy_restored:"旧数据已恢复，原始内容保持不变。",
   n_title:'笔记卡片', n_sub:'打开论文原文会自动重排正文与插图，可调整字号、划线，也可切换摘要导读。',
   n_ph:'搜索标题或关键词…', badge_paper:'论文笔记', badge_concept:'概念卡',
   untitled:'未命名讨论', n_empty:'还没有笔记。先去队列里丢一篇论文吧。',
@@ -1660,10 +1753,45 @@ en: {
   note_missing:'No note yet. Generate it manually or on schedule from the queue; reading and highlights work independently.',
   r_expand:'Larger window', pdf_fit:'Fit width', pdf_smaller:'Zoom PDF out', pdf_larger:'Zoom PDF in',
   st_pending:'Queued', st_processing:'Processing', st_done:'Done', st_failed:'Failed', del:'Delete',
-  trash_title:'Paper trash', trash_open:'Trash', trash_back:'Back to notes', trash_paper:'Trash paper',
-  trash_restore:'Restore', trash_empty:'Trash is empty', trash_done:'Paper moved to trash. You can restore it.', trash_restored:'Paper restored.',
-  trash_hint:'Guides, app-owned source caches and annotations are retained here. Restore never overwrites existing files; external originals are untouched.',
-  trash_confirm:'Move all guides, app-owned source caches and annotations for this paper to trash? This is reversible; external original files are untouched.',
+  delete_choose:"Select one paper",
+  delete_choose_hint:"Select a paper, then confirm. Cancel or Esc leaves selection mode.",
+  delete_start:"Delete",
+  delete_cancel:"Cancel",
+  delete_selected:"Delete selected",
+  delete_title:"Delete this paper?",
+  delete_confirm:"Move to Recycle Bin",
+  delete_hint:"Guides, app-owned source caches and annotations go to the Windows Recycle Bin. External originals stay untouched.",
+  delete_count:"Files or folders to recycle: {n}",
+  delete_queue_only:"This queue entry has no local files. Only the entry will be removed; there will be no file to restore from the Recycle Bin.",
+  delete_remove:"Remove entry",
+  delete_queue_done:"Queue entry removed.",
+  delete_working:"Moving to Windows Recycle Bin…",
+  delete_done:"Moved to the Windows Recycle Bin.",
+  delete_receipt_failed:"{done} items confirmed recycled; {left} remain in place. The receipt could not be saved. Check or restore in Windows, fix storage, and refresh before retrying.",
+  delete_metadata_failed:"Files were recycled, but saving the status failed. Fix storage, then retry finishing the update.",
+  delete_partial_title:"Deletion did not finish",
+  delete_partial:"Windows confirmed {done} items recycled; {left} remain in place. Check the system Recycle Bin. No permanent-delete fallback is used.",
+  delete_ok:"OK",
+  restore_pending:"Incomplete restore or a conflict",
+  restore_pending_title:"Check the restored files",
+  restore_pending_hint:"Returned files are left untouched. Restore the remaining items in Windows, or explicitly import the current source again if contents changed or queue data conflicts. Files are never overwritten automatically.",
+  delete_retry:"Retry remaining",
+  delete_confirm_open:"Finish the current confirmation first.",
+  delete_unfinished:"Unfinished deletion",
+  delete_finish:"Finish update",
+  delete_finish_hint:"Files are already in the system Recycle Bin. Only the queue state will be updated; no files will move.",
+  reimport_title:"Import this paper again?",
+  reimport_hint:"The selected source will reactivate this paper. Annotations not restored from Windows will not be recovered automatically. Different existing files are never overwritten.",
+  reimport_confirm:"Import again",
+  repair_title:"Resolve legacy records",
+  repair_hint:"Choose one record. Old app-held data moves only when you explicitly restore it. New deletions do not keep private paper copies.",
+  repair_notice:"{n} legacy or unfinished records need attention. Data is preserved.",
+  repair_choose:"Resolve records",
+  legacy_record:"Legacy app-held data",
+  legacy_restore_title:"Restore this legacy record?",
+  legacy_restore_hint:"Restore to its original storage location without overwriting existing files. You can then use the new delete action to send it to Windows.",
+  legacy_restore:"Restore old data",
+  legacy_restored:"Legacy data restored without changing its contents.",
   n_title:'Note Cards', n_sub:'Read locally reflowed original text and figures, adjust font size and highlight, or switch to the abstract-based note.',
   n_ph:'Search titles or keywords…', badge_paper:'Study note', badge_concept:'Concept card',
   untitled:'Untitled discussion', n_empty:'No notes yet. Queue a paper first.',
@@ -1726,117 +1854,235 @@ function emptyState(title, sub, act){
   return `<div class="gempty">${BOOK_SVG}<div class="gt">${title}</div><div class="gs">${sub}</div>${act === 'q' ? `<button class="btn" onclick="document.getElementById('q-input').focus()">${t('q_focus')}</button>` : ''}</div>`;
 }
 
+/* ---------- paper selection + compact confirmation ---------- */
+let notesCache = [], deleteMode = null, deleteSelection = null, deleteBusy = false;
+let repairCache = {legacy:[],pending:[]}, actionState = null;
+const retiredPapers = new Set();
+const paperEvents = typeof BroadcastChannel === 'function' ? new BroadcastChannel('lazyscholar-paper-lifecycle') : null;
+function lifecycleChanged(type, paperId){
+  if (type === 'trashed') {
+    retiredPapers.add(paperId);
+    if (curArxiv === paperId) $('#btn-reader-close').click();
+  } else if (type === 'activated') retiredPapers.delete(paperId);
+  refreshQueue(); refreshNotes();
+}
+paperEvents?.addEventListener('message', event => {
+  if (['trashed','activated'].includes(event.data?.type)) lifecycleChanged(event.data.type,event.data.paperId);
+});
+function announceLifecycle(type,id){
+  lifecycleChanged(type,id);
+  paperEvents?.postMessage({type,paperId:id});
+}
+function updateDeleteToolbar(){
+  for (const page of ['notes','queue']) {
+    const selecting = deleteMode === page;
+    $('#page-' + page + ' h2').textContent = t(selecting ? 'delete_choose' : page === 'notes' ? 'n_title' : 'q_title');
+    $('#page-' + page + ' > .sub').innerHTML = t(selecting ? 'delete_choose_hint' : page === 'notes' ? 'n_sub' : 'q_sub').replace('{time}',scheduleTime);
+    $('#delete-' + page).hidden = selecting;
+    $('#delete-' + page + '-cancel').hidden = !selecting;
+    $('#delete-' + page + '-selected').hidden = !selecting;
+    $('#delete-' + page).disabled = deleteBusy;
+    $('#delete-' + page + '-cancel').disabled = deleteBusy;
+    $('#delete-' + page + '-selected').disabled = deleteBusy || !deleteSelection;
+  }
+}
+function setDeleteMode(mode){
+  if (deleteBusy) return;
+  deleteMode = mode; deleteSelection = null;
+  renderNotes(notesCache); refreshQueue(); updateDeleteToolbar();
+}
+for (const page of ['notes','queue']) {
+  $('#delete-' + page).addEventListener('click', () => setDeleteMode(page));
+  $('#delete-' + page + '-cancel').addEventListener('click', () => setDeleteMode(null));
+  $('#delete-' + page + '-selected').addEventListener('click', () => runAction(null, () => performDeletion(deleteSelection)));
+}
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !$('#paper-action-dialog').open && deleteMode) setDeleteMode(null);
+});
+document.querySelectorAll('#rail [data-tab]').forEach(button => button.addEventListener('click', () => {
+  if (deleteMode && button.dataset.tab !== deleteMode) setDeleteMode(null);
+}));
+function askPaperAction(options){
+  if (actionState) throw Error(t('delete_confirm_open'));
+  const dialog = $('#paper-action-dialog');
+  $('#paper-action-title').textContent = options.title;
+  $('#paper-action-subject').textContent = options.subject || '';
+  $('#paper-action-message').textContent = options.message || '';
+  $('#paper-action-count').textContent = options.count || '';
+  $('#paper-action-confirm').textContent = options.label || t('delete_confirm');
+  $('#paper-action-confirm').classList.toggle('danger',options.danger !== false);
+  $('#paper-action-confirm').classList.toggle('copper',options.danger === false);
+  $('#paper-action-cancel').textContent = t('delete_cancel');
+  const choices = options.choices || [];
+  $('#paper-action-choices').innerHTML = choices.map((choice,index) => `
+    <label class="repair-choice"><input type="radio" name="paper-repair-choice" value="${index}">
+    <span>${escapeHtml(choice.title)}<small>${escapeHtml(choice.kind === 'legacy' ? t('legacy_record') : choice.kind === 'restore' ? t('restore_pending') : t('delete_unfinished'))}</small></span></label>`).join('');
+  $('#paper-action-confirm').disabled = !!choices.length;
+  $('#paper-action-choices').querySelectorAll('input').forEach(input => input.addEventListener('change', () => {
+    actionState.choice = choices[Number(input.value)]; $('#paper-action-confirm').disabled = false;
+  }));
+  dialog.returnValue = '';
+  return new Promise(resolve => {
+    actionState = {resolve,choice:null};
+    dialog.showModal(); $('#paper-action-cancel').focus();
+  });
+}
+$('#paper-action-cancel').addEventListener('click', () => $('#paper-action-dialog').close('cancel'));
+$('#paper-action-confirm').addEventListener('click', () => $('#paper-action-dialog').close('confirm'));
+$('#paper-action-dialog').addEventListener('cancel', () => { $('#paper-action-dialog').returnValue = 'cancel'; });
+$('#paper-action-dialog').addEventListener('close', () => {
+  const state = actionState; actionState = null;
+  if (state) state.resolve($('#paper-action-dialog').returnValue === 'confirm' ? (state.choice || true) : false);
+});
+async function performDeletion(selection){
+  if (!selection || deleteBusy) return;
+  deleteBusy = true; updateDeleteToolbar();
+  let retry = null;
+  try {
+    const preview = await post('/api/papers/preview',selection);
+    const accepted = await askPaperAction({
+      title:t('delete_title'),subject:preview.title,
+      message:preview.queue_only ? t('delete_queue_only') : preview.count ? t('delete_hint') : t('delete_finish_hint'),
+      count:preview.count ? t('delete_count').replace('{n}',preview.count) : '',
+      label:preview.queue_only ? t('delete_remove') : preview.count ? t('delete_confirm') : t('delete_finish'),
+      danger:preview.queue_only || preview.count > 0
+    });
+    if (!accepted) return;
+    showMessage(t('delete_working'));
+    const result = await post('/api/papers/delete',{...selection,token:preview.token});
+    announceLifecycle('trashed',result.paper_id);
+    deleteMode = null; deleteSelection = null;
+    showMessage(result.queue_only ? t('delete_queue_done') : t('delete_done'));
+  } catch(error) {
+    if (error.data?.partial) {
+      announceLifecycle('trashed',error.data.paper_id);
+      deleteMode = null; deleteSelection = null;
+      const accepted = await askPaperAction({
+        title:t('delete_partial_title'),
+        message:t(error.data.restore_required ? 'delete_receipt_failed' : error.data.receipt_pending ? 'delete_metadata_failed' : 'delete_partial').replace('{done}',error.data.completed).replace('{left}',error.data.remaining),
+        label:error.data.restore_required ? t('delete_ok') : error.data.metadata_pending ? t('delete_finish') : error.data.remaining > 0 ? t('delete_retry') : t('delete_ok'),
+        danger:false
+      });
+      if (accepted && !error.data.restore_required && (error.data.remaining > 0 || error.data.metadata_pending)) retry = {receipt_id:error.data.id};
+    } else showMessage(error.message,true);
+  } finally {
+    deleteBusy = false; updateDeleteToolbar(); renderNotes(notesCache); refreshQueue();
+  }
+  if (retry) await performDeletion(retry);
+}
+async function enqueuePaper(kind,value){
+  try { return await post('/api/queue',{kind,value}); }
+  catch(error) {
+    if (!error.data?.reimport_id) throw error;
+    const accepted = await askPaperAction({
+      title:t('reimport_title'),subject:error.data.paper_id,message:t('reimport_hint'),label:t('reimport_confirm'),danger:false
+    });
+    if (!accepted) return null;
+    const result = await post('/api/queue',{kind,value,paper_id:error.data.paper_id,reactivate:error.data.reimport_id});
+    announceLifecycle('activated',error.data.paper_id);
+    return result;
+  }
+}
+$('#paper-repair-button').addEventListener('click', () => runAction($('#paper-repair-button'), async () => {
+  const choices = [...repairCache.legacy.map(row => ({...row,kind:'legacy'})),...repairCache.pending.map(row => ({...row,kind:row.kind || 'pending'}))];
+  if (!choices.length) return;
+  const choice = await askPaperAction({title:t('repair_title'),message:t('repair_hint'),choices,label:t('repair_choose'),danger:false});
+  if (!choice) return;
+  if (choice.kind === 'pending') { await performDeletion({receipt_id:choice.id}); return; }
+  if (choice.kind === 'restore') {
+    await askPaperAction({title:t('restore_pending_title'),subject:choice.title,message:t('restore_pending_hint'),label:t('delete_ok'),danger:false}); return;
+  }
+  const accepted = await askPaperAction({title:t('legacy_restore_title'),subject:choice.title,message:t('legacy_restore_hint'),label:t('legacy_restore'),danger:false});
+  if (!accepted) return;
+  const result = await post('/api/papers/legacy/restore',{id:choice.id});
+  announceLifecycle('activated',result.paper_id); showMessage(t('legacy_restored'));
+}));
 /* ---------- queue ---------- */
 async function refreshQueue(){
   try {
     const items = await api('/api/queue');
+    if (deleteMode === 'queue' && deleteSelection && !items.some(item => item.id === deleteSelection.queue_id)) deleteSelection = null;
     const box = $('#qlist');
-    if (!items.length) { box.innerHTML = emptyState(t('q_empty_t'), t('q_empty'), 'q'); return; }
+    if (!items.length) { box.innerHTML = emptyState(t('q_empty_t'),t('q_empty'),'q'); updateDeleteToolbar(); return; }
     box.innerHTML = items.map(it => `
-      <div class="qitem">
-        <button class="del" data-del="${it.id}" ${it.status === 'processing' ? 'disabled' : ''}>${t('trash_paper')}</button>
+      <div class="qitem ${deleteMode === 'queue' ? 'selectable' : ''} ${deleteSelection?.queue_id === it.id ? 'paper-selected' : ''}" data-queue-card="${it.id}">
+        ${deleteMode === 'queue' ? `<input class="paper-radio" type="radio" name="paper-queue-selection" data-select-queue="${it.id}" aria-label="${escapeHtml(it.label || it.value || '')}" ${deleteSelection?.queue_id === it.id ? 'checked' : ''} ${deleteBusy || it.status === 'processing' ? 'disabled' : ''}>` : ''}
         <div class="ttl">${escapeHtml(it.label || it.value || '')}</div>
         <div class="meta">${it.kind === 'html' ? t('q_src_html') : it.kind === 'pdf' ? t('q_src_file') : t('q_src_link')} · <span class="st st-${it.status}">${t('st_' + it.status)}</span>${it.progress ? ' · ' + escapeHtml(it.progress) : ''}${it.error ? ' · ' + escapeHtml(it.error) : ''}</div>
-        ${it.status === 'failed' ? `<button class="btn ghost" data-retry="${it.id}">${t('retry')}</button>` : ''}
-        <button class="btn ghost" data-read="${it.id}">${t('q_read')}</button>
+        ${it.status === 'failed' && deleteMode !== 'queue' ? `<button class="btn ghost" data-retry="${it.id}">${t('retry')}</button>` : ''}
+        ${deleteMode !== 'queue' ? `<button class="btn ghost" data-read="${it.id}">${t('q_read')}</button>` : ''}
       </div>`).join('');
-    box.querySelectorAll('[data-read]').forEach(b => b.addEventListener('click', () =>
-      runAction(b, () => openQueuedPaper(b.dataset.read))));
-    for (const [attribute, route] of [['del', 'delete'], ['retry', 'retry']]) {
-      box.querySelectorAll('[data-' + attribute + ']').forEach(b => b.addEventListener('click', () => runAction(b, async () => {
-        if (attribute === 'del') await movePaperToTrash({queue_id:b.dataset[attribute]});
-        else { await post('/api/queue/' + route, {id:b.dataset[attribute]}); await refreshQueue(); }
-      })));
-    }
-  } catch(e) { showMessage(e.message, true); }
+    box.querySelectorAll('[data-read]').forEach(b => b.addEventListener('click', () => runAction(b, () => openQueuedPaper(b.dataset.read))));
+    box.querySelectorAll('[data-retry]').forEach(b => b.addEventListener('click', () => runAction(b, async () => {
+      await post('/api/queue/retry',{id:b.dataset.retry}); await refreshQueue();
+    })));
+    if (deleteMode === 'queue') box.querySelectorAll('[data-queue-card]').forEach(card => card.addEventListener('click', () => {
+      const input = card.querySelector('[data-select-queue]');
+      if (input.disabled || deleteBusy) return;
+      deleteSelection = {queue_id:input.dataset.selectQueue}; refreshQueue(); updateDeleteToolbar();
+    }));
+    updateDeleteToolbar();
+  } catch(error) { showMessage(error.message,true); }
 }
-$('#btn-add').addEventListener('click', () => runAction($('#btn-add'), async () => {
+$('#btn-add').addEventListener('click', () => runAction($('#btn-add'),async () => {
   const value = $('#q-input').value.trim(); if (!value) return;
-  await post('/api/queue', {kind:'link', value});
-  $('#q-input').value = ''; await refreshQueue();
+  if (await enqueuePaper('link',value)) $('#q-input').value = '';
+  await refreshQueue();
 }));
-$('#q-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('#btn-add').click(); });
-$('#btn-pick').addEventListener('click', () => runAction($('#btn-pick'), async () => {
+$('#q-input').addEventListener('keydown',event => { if (event.key === 'Enter') $('#btn-add').click(); });
+$('#btn-pick').addEventListener('click', () => runAction($('#btn-pick'),async () => {
   const path = await window.pywebview.api.pick_pdf();
-  if (path) { await post('/api/queue', {kind:'pdf', value:path}); await refreshQueue(); }
+  if (path) { await enqueuePaper('pdf',path); await refreshQueue(); }
 }));
-$('#btn-pick-html').addEventListener('click', () => runAction($('#btn-pick-html'), async () => {
+$('#btn-pick-html').addEventListener('click', () => runAction($('#btn-pick-html'),async () => {
   const path = await window.pywebview.api.pick_html();
-  if (path) { await post('/api/queue', {kind:'html', value:path}); await refreshQueue(); }
+  if (path) { await enqueuePaper('html',path); await refreshQueue(); }
 }));
-$('#btn-run').addEventListener('click', () => runAction($('#btn-run'), async () => {
+$('#btn-run').addEventListener('click', () => runAction($('#btn-run'),async () => {
   const result = await post('/api/queue/run');
   await refreshQueue(); await refreshNotes(); await refreshModel();
-  showMessage(result.msg || t('batch_result').replace('{done}', result.processed || 0).replace('{failed}', result.failed || 0), !!result.failed);
+  showMessage(result.msg || t('batch_result').replace('{done}',result.processed || 0).replace('{failed}',result.failed || 0),!!result.failed);
 }));
-
 /* ---------- notes + reader ---------- */
-let notesCache = [], trashCache = [], notesTrashView = false;
-const paperEvents = typeof BroadcastChannel === 'function' ? new BroadcastChannel('lazyscholar-paper-lifecycle') : null;
-function lifecycleChanged(type, paperId){
-  if (type === 'trashed' && curArxiv === paperId) $('#btn-reader-close').click();
-  refreshQueue(); refreshNotes();
-}
-paperEvents?.addEventListener('message', event => {
-  if (['trashed','restored'].includes(event.data?.type)) lifecycleChanged(event.data.type,event.data.paperId);
-});
-async function movePaperToTrash(selection){
-  if (!confirm(t('trash_confirm'))) return;
-  const result = await post('/api/papers/trash',selection);
-  lifecycleChanged('trashed',result.paper_id);
-  paperEvents?.postMessage({type:'trashed',paperId:result.paper_id});
-  showMessage(t('trash_done'));
-}
-$('#btn-paper-trash').addEventListener('click', () => {
-  notesTrashView = !notesTrashView; refreshNotes();
-});
 async function refreshNotes(){
   try {
-    if (notesTrashView) { trashCache = await api('/api/papers/trash'); renderNotes(notesCache); return; }
-    const d = await api('/api/notes');
-    notesCache = [...(d.papers || []).map(n => ({...n, kind:'papers'})),
-                  ...(d.concepts || []).map(n => ({...n, kind:'concepts'}))]
-      .sort((a,b) => b.mtime - a.mtime);
+    const data = await api('/api/notes');
+    for (const identity of data.reactivated || []) {
+      retiredPapers.delete(identity); paperEvents?.postMessage({type:'activated',paperId:identity});
+    }
+    notesCache = [...(data.papers || []).map(n => ({...n,kind:'papers'})),...(data.concepts || []).map(n => ({...n,kind:'concepts'}))]
+      .sort((a,b) => b.mtime-a.mtime);
     renderNotes(notesCache);
-  } catch(e) { showMessage(e.message, true); }
+    repairCache = await api('/api/papers/state');
+    const count = repairCache.legacy.length + repairCache.pending.length;
+    $('#paper-repair').hidden = !count;
+    $('#paper-repair-text').textContent = t('repair_notice').replace('{n}',count);
+    $('#paper-repair-button').textContent = t('repair_choose');
+  } catch(error) { showMessage(error.message,true); }
 }
 function renderNotes(notes){
   window._notes = notes;
   const q = ($('#n-search').value || '').toLowerCase();
-  $('#btn-paper-trash').textContent = t(notesTrashView ? 'trash_back' : 'trash_open');
-  $('#page-notes h2').textContent = t(notesTrashView ? 'trash_title' : 'n_title');
-  $('#page-notes .sub').textContent = t(notesTrashView ? 'trash_hint' : 'n_sub');
-  if (notesTrashView) {
-    const entries = trashCache.filter(n => !q || n.title.toLowerCase().includes(q));
-    $('#nlist').innerHTML = entries.length ? entries.map(n => `
-      <div class="note trash-entry"><button class="btn ghost" data-restore="${n.id}">${t('trash_restore')}</button>
-      <div class="ttl">${escapeHtml(n.title)}</div><div class="meta">${escapeHtml(n.paper_id)} · ${escapeHtml(n.date)}</div></div>`).join('')
-      : emptyState(t('trash_empty'),t('trash_hint'),'');
-    $('#nlist').querySelectorAll('[data-restore]').forEach(b => b.addEventListener('click', () => runAction(b, async () => {
-      const result = await post('/api/papers/restore',{id:b.dataset.restore});
-      lifecycleChanged('restored',result.paper_id);
-      paperEvents?.postMessage({type:'restored',paperId:result.paper_id});
-      showMessage(t('trash_restored'));
-    })));
-    return;
-  }
   const list = notes.filter(n => !q || n.title.toLowerCase().includes(q));
+  if (deleteMode === 'notes' && deleteSelection && !list.some(n => n.name === deleteSelection.name && n.kind === 'papers')) deleteSelection = null;
   $('#nlist').innerHTML = list.length ? list.map((n,index) => `
-    <div class="note" data-open="${index}">
-      ${n.kind === 'papers' && n.paper_id ? `<button class="del" data-trash-note="${index}">${t('trash_paper')}</button>` : ''}
+    <div class="note ${deleteMode === 'notes' && n.kind === 'papers' && n.paper_id ? 'selectable' : ''} ${deleteSelection?.name === n.name ? 'paper-selected' : ''}" data-open="${index}">
+      ${deleteMode === 'notes' && n.kind === 'papers' && n.paper_id ? `<input class="paper-radio" type="radio" name="paper-note-selection" data-select-note="${escapeHtml(n.name)}" aria-label="${escapeHtml(n.title)}" ${deleteSelection?.name === n.name ? 'checked' : ''} ${deleteBusy ? 'disabled' : ''}>` : ''}
       <div class="ttl"><span class="badge">${n.kind === 'papers' ? t('badge_paper') : t('badge_concept')}</span>${escapeHtml(n.title)}</div>
-      <div class="meta">${new Date(n.mtime * 1000).toLocaleDateString(LANG === 'en' ? 'en-US' : 'zh-CN')}</div>
-    </div>`).join('') : emptyState(t('n_empty_t'), t('n_empty'), '');
-  document.querySelectorAll('[data-open]').forEach(el => el.addEventListener('click', () =>
-    runAction(null, () => openNote(list[Number(el.dataset.open)]))));
-  $('#nlist').querySelectorAll('[data-trash-note]').forEach(b => b.addEventListener('click', event => {
-    event.stopPropagation();
-    runAction(b, () => movePaperToTrash({name:list[Number(b.dataset.trashNote)].name}));
+      <div class="meta">${new Date(n.mtime*1000).toLocaleDateString(LANG === 'en' ? 'en-US' : 'zh-CN')}</div>
+    </div>`).join('') : emptyState(t('n_empty_t'),t('n_empty'),'');
+  $('#nlist').querySelectorAll('[data-open]').forEach(card => card.addEventListener('click', () => {
+    const note = list[Number(card.dataset.open)];
+    if (deleteMode === 'notes') {
+      if (deleteBusy || note.kind !== 'papers' || !note.paper_id) return;
+      deleteSelection = {name:note.name}; renderNotes(notesCache); return;
+    }
+    runAction(null,() => openNote(note));
   }));
+  updateDeleteToolbar();
 }
-$('#n-search').addEventListener('input', () => renderNotes(notesCache));
-
-let curNote = null, hlMode = false, eraseMode = false, curArxiv = null, readerVersion = 0, pdfLoaded = false;
+$('#n-search').addEventListener('input',() => renderNotes(notesCache));
+let curNote = null, hlMode = false, eraseMode = false, curArxiv = null, curLifecycle = '', readerVersion = 0, pdfLoaded = false;
 let readerView = 'note', pdfVersion = 0, curQueueId = null, curHasPdf = false;
 let pdfDocumentPromise = null, pdfObserver = null, pdfZoom = 1.5;
 function syncReaderTools(){
@@ -1897,7 +2143,9 @@ async function openQueuedPaper(id, view=null){
 async function openDocument(d, note, version, view='paper', queueId=null){
   releasePdf(); ++pdfVersion; pdfZoom = 1.5;
   paperState = null; curQueueId = queueId;
-  curNote = note; curArxiv = (d.arxiv || d.paper_id || '').replace(/^(\d{4}\.\d{4,5})v\d+$/, '$1') || null; pdfLoaded = false;
+  const identity = (d.arxiv || d.paper_id || '').replace(/^(\d{4}\.\d{4,5})v\d+$/, '$1') || null;
+  if (retiredPapers.has(identity)) throw Error(t('paper_changed'));
+  curNote = note; curArxiv = identity; curLifecycle = d.lifecycle || ''; pdfLoaded = false;
   curHasPdf = /^\d{4}\.\d{4,5}(v\d+)?$/.test(curArxiv || '');
   $('#r-title').textContent = d.title || note?.title || curArxiv;
   $('#note-md').innerHTML = d.html || '';
@@ -1951,7 +2199,7 @@ $('#pdf-zoom-in').addEventListener('click', () => runAction(null, () => changePd
 $('#pdf-zoom-out').addEventListener('click', () => runAction(null, () => changePdfZoom(-.25)));
 $('#pdf-fit').addEventListener('click', () => runAction(null, () => resizePdf(null)));
 $('#btn-reader-close').addEventListener('click', () => {
-  ++readerVersion; releasePdf(); curArxiv = null; curHasPdf = false; curNote = null; curQueueId = null; paperState = null; setHighlightMode(null);
+  ++readerVersion; releasePdf(); curArxiv = null; curLifecycle = ''; curHasPdf = false; curNote = null; curQueueId = null; paperState = null; setHighlightMode(null);
   if (standaloneReader) {
     if (window.pywebview?.api?.close_reader) window.pywebview.api.close_reader();
     else window.close();
@@ -2103,14 +2351,18 @@ async function fetchHighlights(arxiv){
   const d = await api('/api/highlights?id=' + encodeURIComponent(arxiv));
   return d.highlights || [];
 }
-async function mutateHighlights(url, change, source=null){
+async function mutateHighlights(url, change, context, source=null){
+  const {version,epoch} = context;
+  const options = {headers:{'X-Paper-Lifecycle':epoch}};
   for (let attempt=0; attempt<5; attempt++) {
-    const current = await api(url);
+    if (version !== readerVersion || epoch !== curLifecycle) throw Error(t('paper_changed'));
+    const current = await api(url,options);
+    if (version !== readerVersion || epoch !== curLifecycle) throw Error(t('paper_changed'));
     if (source !== null && current.source !== source) throw Error(t('paper_changed'));
     const highlights = change(current.highlights || []);
     if (highlights === null) return current;
     try {
-      return await post(url,{source:current.source,revision:current.revision,highlights});
+      return await post(url,{source:current.source,revision:current.revision,highlights},options);
     } catch(e) {
       if (e.status !== 409 || attempt === 4) throw e;
     }
@@ -2131,13 +2383,13 @@ document.addEventListener('mouseup', () => {
       y:Math.max(0,(r.top-pr.top)/pr.height), w:Math.min(1,r.width/pr.width), h:Math.min(1,r.height/pr.height)});
   }
   if (!out.length) return;
-  const id = curArxiv, version = readerVersion, erasing = eraseMode;
+  const id = curArxiv, version = readerVersion, epoch = curLifecycle, erasing = eraseMode;
   sel.removeAllRanges();
   const operation = highlightWrite.catch(() => {}).then(async () => {
     const saved = await mutateHighlights('/api/highlights?id=' + encodeURIComponent(id), current => {
       const merged = erasing ? erasePdfHighlights(current,out) : current.concat(out);
       return erasing && sameHighlightList(current,merged) ? null : merged;
-    });
+    }, {version,epoch});
     const merged = saved.highlights;
     if (version === readerVersion) {
       document.querySelectorAll('#pdf-wrap .hl').forEach(el => el.remove());
@@ -2330,13 +2582,13 @@ document.addEventListener('mouseup', () => {
     if (end > start) rows.push({block:el.dataset.block,start,end,quote:text.slice(start,end)});
   }
   if (!rows.length) return;
-  const erasing = eraseMode;
+  const erasing = eraseMode, context = {version:readerVersion,epoch:curLifecycle};
   selection.removeAllRanges();
   const operation = highlightWrite.catch(() => {}).then(async () => {
     const saved = await mutateHighlights('/api/reading-highlights?id=' + encodeURIComponent(state.id), current => {
       const highlights = erasing ? eraseTextHighlights(current,rows) : current.concat(rows);
       return erasing && sameHighlightList(current,highlights) ? null : highlights;
-    }, state.source);
+    }, context, state.source);
     state.highlights = saved.highlights;
     if (paperState === state && state.version === readerVersion) refreshReadingMarks();
   });
@@ -2519,10 +2771,11 @@ def serve_ui(vault: Path, open_browser: bool = False) -> None:
 
         def _paper_access(self, mutation=False):
             path = urllib.parse.urlparse(self.path).path
-            protected = (path in ("/api/note", "/api/queue", "/api/queue/reading", "/api/pdf",
+            protected = (path in ("/api/note", "/api/queue/reading", "/api/pdf",
                                    "/api/highlights", "/api/reading-highlights", "/api/queue/delete", "/api/queue/retry")
                          or path.startswith("/api/paper"))
-            if mutation and path in ("/api/papers/trash", "/api/papers/restore"):
+            if mutation and path in ("/api/papers/trash", "/api/papers/restore", "/api/papers/delete",
+                                      "/api/papers/legacy/restore", "/api/queue"):
                 protected = False
             return paper_trash.reading(vault) if protected else nullcontext()
 
@@ -2538,7 +2791,10 @@ def serve_ui(vault: Path, open_browser: bool = False) -> None:
         def _paper_identity_check(self):
             u = urllib.parse.urlparse(self.path)
             if u.path in self._paper_id_paths:
-                paper_trash.ensure_active(vault, self._paper_query(u).get("id", [""])[0])
+                identity = self._paper_query(u).get("id", [""])[0]
+                paper_trash.ensure_active(vault, identity)
+                if u.path in ("/api/highlights", "/api/reading-highlights"):
+                    paper_trash.check_lifecycle(vault, identity, self.headers.get("X-Paper-Lifecycle", ""))
 
         def do_GET(self) -> None:
             if not self._local_request():
@@ -2549,7 +2805,8 @@ def serve_ui(vault: Path, open_browser: bool = False) -> None:
                     self._paper_identity_check()
                     self._get()
             except paper_trash.Gone as e:
-                self._json({"ok": False, "msg": str(e), "paper_deleted": True}, 410)
+                self._json({"ok": False, "msg": str(e), "paper_deleted": True,
+                            "paper_id": e.paper_id, "reimport_id": e.reimport_id}, 410)
             except paper_html.HtmlUnavailable as e:
                 self._json({"ok": False, "msg": str(e), "fallback": "pdf"}, 503)
             except (ValueError, TypeError, OSError) as e:
@@ -2564,7 +2821,8 @@ def serve_ui(vault: Path, open_browser: bool = False) -> None:
                     self._paper_identity_check()
                     self._post()
             except paper_trash.Gone as e:
-                self._json({"ok": False, "msg": str(e), "paper_deleted": True}, 410)
+                self._json({"ok": False, "msg": str(e), "paper_deleted": True,
+                            "paper_id": e.paper_id, "reimport_id": e.reimport_id}, 410)
             except paper_trash.Busy as e:
                 self._json({"ok": False, "msg": str(e)}, 409)
             except paper_html.AnnotationConflict as e:
@@ -2596,7 +2854,10 @@ def serve_ui(vault: Path, open_browser: bool = False) -> None:
                 else:
                     self._send(404, b"vendor file missing", "text/plain; charset=utf-8")
             elif u.path == "/api/notes":
-                self._json(vault_state(vault, check_model=False))
+                activated = reconcile_deleted(vault)
+                self._json({**vault_state(vault, check_model=False), "reactivated": activated})
+            elif u.path == "/api/papers/state":
+                self._json(paper_trash.attention(vault))
             elif u.path == "/api/papers/trash":
                 self._json(paper_trash.list_entries(vault))
             elif u.path == "/api/note":
@@ -2625,6 +2886,7 @@ def serve_ui(vault: Path, open_browser: bool = False) -> None:
                     "html": md_to_html(md),
                     "arxiv": paper_id if paper_id and ARXIV_ID_RE.fullmatch(paper_id) else None,
                     "paper_id": paper_id,
+                    "lifecycle": paper_trash.lifecycle_epoch(vault, paper_id) if paper_id else "",
                 }
                 self._json(payload)
             elif u.path == "/api/state":
@@ -2698,21 +2960,24 @@ def serve_ui(vault: Path, open_browser: bool = False) -> None:
             u = urllib.parse.urlparse(self.path)
             q = self._paper_query(u)
             body = self._body_json()
-            if u.path in ("/api/papers/trash", "/api/papers/restore"):
-                if not _batch_lock.acquire(blocking=False):
-                    raise paper_trash.Busy("正在生成导读，请完成后再删除或恢复论文")
-                try:
-                    with paper_trash.changing(vault), _queue_lock:
-                        items = load_queue(vault)
-                        def save(values):
-                            save_queue(vault, values)
-                        if u.path.endswith("/restore"):
-                            result = paper_trash.restore(vault, body.get("id", ""), items, save)
-                        else:
-                            result = paper_trash.trash(vault, items, save, name=body.get("name", ""), queue_item=body.get("queue_id", ""))
-                    self._json(result)
-                finally:
-                    _batch_lock.release()
+            if u.path == "/api/papers/preview":
+                data = paper_trash.preview(vault, load_queue(vault), name=body.get("name", ""),
+                                           queue_item=body.get("queue_id", ""), receipt_id=body.get("receipt_id", ""))
+                self._json({key: data[key] for key in ("paper_id", "title", "token", "count", "queue_only")})
+            elif u.path == "/api/papers/trash":
+                raise paper_trash.Gone("删除界面已更新，请刷新后使用顶部的删除入口")
+            elif u.path in ("/api/papers/delete", "/api/papers/restore", "/api/papers/legacy/restore"):
+                with changing_paper(vault):
+                    items = load_queue(vault)
+                    def save(values):
+                        save_queue(vault, values)
+                    if u.path.endswith("/restore"):
+                        result = paper_trash.restore(vault, body.get("id", ""), items, save)
+                        paper_trash.activate_legacy_restored(vault, result["paper_id"])
+                    else:
+                        result = paper_trash.trash(vault, items, save, name=body.get("name", ""), queue_item=body.get("queue_id", ""),
+                                                   token=body.get("token", ""), receipt_id=body.get("receipt_id", ""))
+                self._json(result, 200 if result["ok"] else 409)
             elif u.path == "/api/config":
                 try:
                     self._json(save_config(vault, body))
@@ -2736,9 +3001,24 @@ def serve_ui(vault: Path, open_browser: bool = False) -> None:
                     self._json({"ok": False, "msg": "参数不对"}, 400)
                     return
                 try:
-                    item = add_queue_item(vault, kind, value)
+                    if body.get("reactivate"):
+                        with changing_paper(vault):
+                            identity = paper_trash.canonical_id(body.get("paper_id", ""))
+                            previous = load_queue(vault)
+                            try:
+                                with paper_trash.reactivating(vault, identity, body["reactivate"]):
+                                    save_queue(vault, [row for row in previous if paper_trash.queue_id(row) != identity])
+                                    item = add_queue_item(vault, kind, value)
+                            except (ValueError, TypeError, OSError):
+                                save_queue(vault, previous)
+                                raise
+                    else:
+                        with paper_trash.reading(vault):
+                            item = add_queue_item(vault, kind, value)
                     self._json({"ok": True, "item": item})
-                except Exception as e:
+                except (paper_trash.Gone, paper_trash.Busy):
+                    raise
+                except (ValueError, TypeError, OSError) as e:
                     self._json({"ok": False, "msg": str(e)[:200]}, 400)
             elif u.path in ("/api/queue/delete", "/api/queue/retry"):
                 try:
@@ -2891,6 +3171,7 @@ def run_app(vault: Path, interval: int) -> int:
             return res[0] if res else None
 
         def open_vault(self):
+            # pi-lens-ignore: S606
             os.startfile(str(vault))
 
         def open_reader(self, params):
@@ -2944,6 +3225,7 @@ def run_app(vault: Path, interval: int) -> int:
 
     def _open_vault():
         try:
+            # pi-lens-ignore: S606
             os.startfile(str(vault))  # Windows only; guarded by caller
         except Exception as e:
             log(vault, f"OPEN vault failed: {e}")

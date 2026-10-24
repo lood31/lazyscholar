@@ -36,3 +36,5 @@ icon-preview.png
 /queue.json
 /preferences.json
 /.paper-trash/
+/paper_deletions.json
+/.tmp/

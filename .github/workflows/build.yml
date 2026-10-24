@@ -33,7 +33,7 @@ jobs:
             'scripts/test_app_backend.py', 'scripts/test_paper_reader.py',
             'scripts/test_paper_html.py', 'scripts/test_saved_html.py',
             'scripts/test_fulltext.py', 'scripts/test_generation_language.py',
-            'scripts/test_paper_trash.py'
+            'scripts/test_paper_trash.py', 'scripts/test_windows_recycle.py'
           )
           foreach ($test in $tests) {
             python -B $test
@@ -47,6 +47,7 @@ jobs:
           --collect-all webview --collect-all pystray
           --collect-all pdfplumber --collect-all pdfminer --collect-all pypdfium2
           --collect-all bleach --collect-all bs4 --collect-all defusedxml
+          --copy-metadata pywin32
           --add-data "vendor;vendor" --add-data "lazyscholar.ico;."
           lazyscholar.py
 

@@ -1,6 +1,7 @@
 pywebview
 pillow
 pystray
+pywin32==312; sys_platform == "win32"
 pdfplumber>=0.11.10,<0.12
 beautifulsoup4>=4.13,<5
 bleach>=6.2,<7

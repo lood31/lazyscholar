@@ -111,9 +111,13 @@ MathML 保留为原生公式；MathJax／KaTeX 有辅助 MathML 时仅保留这�
 
 ## 删除与恢复论文
 
-在论文卡片或队列项点击「移入回收站」并确认；通过「笔记 → 回收站 → 恢复」取回。应用把可确认归属的导读、应用内原文／图片缓存、标注、证据和关联队列数据一起移入保存目录下的 `.paper-trash/`，不永久删除文件，也不移动外部原始文件。无法确认身份的手写笔记，不会仅因正文引用了 arXiv 链接就被当作该论文处理。
+在笔记页或队列页的**顶部点击「删除」**，选择一篇，再通过紧凑确认框确认。普通卡片没有删除按钮。导读、已确认归属的应用内原文／图片缓存、标注和证据直接交给 **Windows 系统回收站**；一篇论文可能对应多个系统回收站项目。外部原始 PDF／网页不动，不永久删除，也不再新建应用回收站或论文备份库。无法确认身份的手写笔记不会仅因正文引用了 arXiv 链接而被删除。
 
-生成导读或原文／标注请求正在执行时，暂不允许移动论文。回收后，旧窗口不能重新下载或写回数据，也不能绕过回收站重新导入；请先恢复。恢复不覆盖已有同名文件，发生冲突时需先手动处理。中断的操作保留恢复记录，可在回收站重试。
+此功能使用本地固定磁盘上的 Windows 原生回收接口（EXE 包含 pywin32），遇到不支持的卷、取消或权限错误会停止，绝不降级成永久删除。多项回收不是整体原子事务：部分成功会准确提示，并保留元数据记录供重试；不会假称已全部完成。正在生成或实际读写原文／标注时暂不允许回收。
+
+在 Windows 回收站还原本篇相关项目后，刷新笔记页；应用核对路径与指纹，再恢复无冲突的队列元数据，不覆盖还原内容。仅部分还原、内容已修改或队列冲突时会提示核实。也可明确重新导入当前来源，未还原的旧标注不会自动找回。恢复/重导入会更新阅读代号，旧窗口或迟到的标注请求不能写入新状态。
+
+`paper_deletions.json` 仅保存删除收据与队列元数据，不存论文内容副本。旧版 `.paper-trash/` 如果已有记录，只显示一次性兼容提示，需逐条明确恢复；不会自动搬动或清空旧数据。没有本地文件的队列项只移除记录，确认框会说明它不会产生可从系统回收站还原的文件。
 
 ## 保存位置、网络与隐私
 
@@ -164,7 +168,7 @@ py -3.13 -m venv .venv
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install pyinstaller
-.\.venv\Scripts\python.exe -m PyInstaller --noconfirm --windowed --onefile --name LazyScholar --icon lazyscholar.ico --collect-all webview --collect-all pystray --collect-all pdfplumber --collect-all pdfminer --collect-all pypdfium2 --collect-all bleach --collect-all bs4 --collect-all defusedxml --add-data "vendor;vendor" --add-data "lazyscholar.ico;." lazyscholar.py
+.\.venv\Scripts\python.exe -m PyInstaller --noconfirm --windowed --onefile --name LazyScholar --icon lazyscholar.ico --collect-all webview --collect-all pystray --collect-all pdfplumber --collect-all pdfminer --collect-all pypdfium2 --collect-all bleach --collect-all bs4 --collect-all defusedxml --copy-metadata pywin32 --add-data "vendor;vendor" --add-data "lazyscholar.ico;." lazyscholar.py
 ```
 
 输出为 `dist/LazyScholar.exe`。EXE 包含所需 Python 依赖，但不包含 GGUF 模型和系统 WebView2 运行时。旧的 `build-app.cmd`／`deploy-v2.ps1` 带有维护者电脑上的固定路径；其他机器请使用上述通用命令。
@@ -184,7 +188,7 @@ py -3.13 -m venv .venv
 
 以下命令使用安装依赖的同一个 Python 环境；若未激活虚拟环境，将 `python` 替换为 `.\.venv\Scripts\python.exe`。
 
-标注 API 的 POST 必须回传 GET 得到的 `revision`；版本冲突返回 HTTP 409。客户端应重读并重新计算本次操作，不能直接重发旧的完整列表。
+标注 API 的 POST 必须回传 GET 得到的 `revision`；版本冲突返回 HTTP 409。客户端应重读并重新计算本次操作，不能直接重发旧的完整列表。存在删除生命周期记录后，还需从 `/api/note` 或 `/api/queue/reading` 捕获 `lifecycle`，读写标注时携带 `X-Paper-Lifecycle`。排队操作在选区入队时保存代号，不能借用重新打开的阅读器代号；过期请求返回 HTTP 410。
 
 离线后端与提取器测试：
 
@@ -196,6 +200,7 @@ python -B scripts/test_saved_html.py
 python -B scripts/test_fulltext.py
 python -B scripts/test_generation_language.py
 python -B scripts/test_paper_trash.py
+python -B scripts/test_windows_recycle.py
 ```
 
 浏览器回归另外需要 Playwright 和 Chromium：
@@ -210,6 +215,15 @@ python -B scripts/test_saved_html_browser.py
 python -B scripts/test_reader_races.py
 python -B scripts/test_pdf_loading_zoom.py
 python -B scripts/test_paper_trash_browser.py
+python -B scripts/test_delete_ui.py
+python -B scripts/test_annotation_lifecycle_browser.py
+```
+
+原生系统回收验收为显式选择项：只回收/还原本次创建的隔离测试文件，不清空或处理用户其他回收站项目。
+
+```powershell
+python -B scripts/accept_windows_recycle.py
+python -B scripts/test_paper_trash_browser.py --exe dist/LazyScholar.exe --native-window
 ```
 
 Windows 真实鼠标验收使用隔离测试目录，会短暂移动并恢复鼠标。请让测试窗口保持前台，暂时停止手动操作：

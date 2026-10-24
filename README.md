@@ -111,9 +111,13 @@ Legacy PDF text annotations migrate to HTML only when the quoted text has a uniq
 
 ## Remove and restore papers
 
-Use **Trash paper** on a paper card or queue entry, then confirm. **Notes → Trash** provides **Restore**. The app moves the identified paper's guides, known app-owned source/image caches, annotations, evidence and related queue data together into `.paper-trash/` inside the storage folder; it does not permanently delete files or move external originals. Unidentified hand-written notes are not treated as papers merely because they cite an arXiv link.
+Use **Delete** in the Notes or Queue toolbar, select one paper, then confirm in the compact app dialog. Normal cards have no delete buttons. Guides, known app-owned source/image caches, annotations and evidence go directly to the **Windows Recycle Bin**. One paper may produce several system-bin entries. External originals are untouched; there is no permanent-delete fallback, new private trash folder or backup copy. A hand-written note is not treated as a paper merely because it cites an arXiv URL.
 
-Generation or an active source/annotation request temporarily blocks moving a paper. Trashed IDs cannot be redownloaded, reimported or written back by old readers until restored. Restore never overwrites an occupied destination. Interrupted operations retain a journal and can be retried from Trash; clear a filename conflict manually before restoring.
+The native adapter supports local fixed disks on Windows (pywin32 is bundled). Unsupported volumes, cancellation and permission errors stop the operation. Multiple items are not an atomic transaction: partial success is reported and metadata receipts support retry, rather than claiming everything completed. Generation and active source/annotation I/O temporarily block recycling.
+
+After restoring the related items in Windows, refresh Notes. The app checks original paths/fingerprints and restores nonconflicting queue metadata without overwriting file contents. Partial restores, changed contents and queue conflicts require attention. Explicit reimport is available but cannot recover annotations left in the system bin. A new reader epoch prevents old tabs and delayed annotation writes from mutating a restored/reimported state.
+
+`paper_deletions.json` holds metadata receipts, not paper-content copies. Existing legacy `.paper-trash/` data is only restored through an explicit, one-record-at-a-time compatibility action; it is never migrated or cleared automatically. A queue entry with no local files only removes metadata and produces no restorable system-bin file; the dialog makes this clear.
 
 ## Storage, network and privacy
 
@@ -164,7 +168,7 @@ From the repository root, after installing the runtime dependencies:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install pyinstaller
-.\.venv\Scripts\python.exe -m PyInstaller --noconfirm --windowed --onefile --name LazyScholar --icon lazyscholar.ico --collect-all webview --collect-all pystray --collect-all pdfplumber --collect-all pdfminer --collect-all pypdfium2 --collect-all bleach --collect-all bs4 --collect-all defusedxml --add-data "vendor;vendor" --add-data "lazyscholar.ico;." lazyscholar.py
+.\.venv\Scripts\python.exe -m PyInstaller --noconfirm --windowed --onefile --name LazyScholar --icon lazyscholar.ico --collect-all webview --collect-all pystray --collect-all pdfplumber --collect-all pdfminer --collect-all pypdfium2 --collect-all bleach --collect-all bs4 --collect-all defusedxml --copy-metadata pywin32 --add-data "vendor;vendor" --add-data "lazyscholar.ico;." lazyscholar.py
 ```
 
 Output: `dist/LazyScholar.exe`. The bundled Python dependencies do not include the local GGUF model or the system WebView2 runtime. The older `build-app.cmd` / `deploy-v2.ps1` helpers contain maintainer-machine paths; use the commands above for a different checkout location.
@@ -184,7 +188,7 @@ Output: `dist/LazyScholar.exe`. The bundled Python dependencies do not include t
 
 Use the same Python environment that has the dependencies installed. If it is not activated, replace `python` below with `.\.venv\Scripts\python.exe`.
 
-Annotation POSTs must echo the `revision` returned by GET. A conflict returns HTTP 409: reread and recompute the operation rather than blindly resending an old replacement list.
+Annotation POSTs must echo the `revision` returned by GET. A conflict returns HTTP 409: reread and recompute the operation rather than blindly resending an old replacement list. After a deletion lifecycle exists, capture `lifecycle` from `/api/note` or `/api/queue/reading` and send it as `X-Paper-Lifecycle` when reading/writing annotations. Capture it when enqueueing a selection; a delayed operation must never borrow the reopened reader's epoch. Stale readers receive HTTP 410.
 
 Offline backend/extractor tests:
 
@@ -196,6 +200,7 @@ python -B scripts/test_saved_html.py
 python -B scripts/test_fulltext.py
 python -B scripts/test_generation_language.py
 python -B scripts/test_paper_trash.py
+python -B scripts/test_windows_recycle.py
 ```
 
 Browser regressions additionally require Playwright and its Chromium installation:
@@ -210,6 +215,15 @@ python -B scripts/test_saved_html_browser.py
 python -B scripts/test_reader_races.py
 python -B scripts/test_pdf_loading_zoom.py
 python -B scripts/test_paper_trash_browser.py
+python -B scripts/test_delete_ui.py
+python -B scripts/test_annotation_lifecycle_browser.py
+```
+
+Native recycling acceptance is opt-in: only files created by that invocation are recycled/restored; no other system-bin entries are touched or emptied.
+
+```powershell
+python -B scripts/accept_windows_recycle.py
+python -B scripts/test_paper_trash_browser.py --exe dist/LazyScholar.exe --native-window
 ```
 
 Interactive Windows acceptance uses an isolated test folder and briefly moves/restores the mouse. Keep its test window in the foreground and pause manual input:
