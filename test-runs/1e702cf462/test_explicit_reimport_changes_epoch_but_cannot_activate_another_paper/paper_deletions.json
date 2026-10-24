@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "papers": {
+    "2510.54321": {
+      "paper_id": "2510.54321",
+      "title": "Fixture",
+      "paths": [
+        "papers/2510.54321-fixture.md",
+        "papers_pdf/2510.54321.pdf",
+        "reader/2510.54321",
+        "html_reader/2510.54321",
+        "highlights/2510.54321.json",
+        "fulltext/2510.54321-0123456789abcdef.json",
+        "queue_files/a1b2c3d4e5.pdf",
+        "processed/a1b2c3d4e5-2510.54321.pdf"
+      ],
+      "fingerprints": {
+        "papers/2510.54321-fixture.md": "7b84c47f3be5ddcc83d95eb4e41dfe7589a63ffe089c436247d70a267ada838b",
+        "papers_pdf/2510.54321.pdf": "fb37c060b06720c50f5607ab94c5327a7b5cf137bb010343b9c05b464d350297",
+        "reader/2510.54321": "70dc003ee390c32a5d17166a1dc44554864a1a37ddb1689d6a42249730cc03c5",
+        "html_reader/2510.54321": "ee81208a273062ec859523d2ca4890a9b7204ca647bda6a92fc130458712efd2",
+        "highlights/2510.54321.json": "b001eb3d7a120f6e88231118edb2f2771648c883070ba2cea90dae498c7f4e41",
+        "fulltext/2510.54321-0123456789abcdef.json": "9d7642fdfdfe382f277e2405b6699d4ca246ebf4be0e57f71cd2e48a0c82d28a",
+        "queue_files/a1b2c3d4e5.pdf": "fb46e2dae03951bf2d787d77953a468bd236bda8ae2bfe569c0953cd9e39e624",
+        "processed/a1b2c3d4e5-2510.54321.pdf": "9e29c80e9aaeff2d75efd92a5e694d36b344bf08727716abefb93e857bfd1325"
+      },
+      "queue": [
+        {
+          "id": "a1b2c3d4e5",
+          "kind": "pdf",
+          "label": "2510.54321.pdf",
+          "value": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1e702cf462\\external-original\\original.pdf",
+          "stored": "a1b2c3d4e5.pdf",
+          "status": "done",
+          "note": "2510.54321-fixture.md"
+        }
+      ],
+      "lifecycle": "",
+      "id": "019dbdafd7c04a5eb5f6d4ca3ccf6dd5",
+      "epoch": "1eedd4fa819141c39e990d416783c9b9",
+      "date": "2026-10-24T09:08:32+00:00",
+      "completed": [
+        "papers/2510.54321-fixture.md",
+        "papers_pdf/2510.54321.pdf",
+        "reader/2510.54321",
+        "html_reader/2510.54321",
+        "highlights/2510.54321.json",
+        "fulltext/2510.54321-0123456789abcdef.json",
+        "queue_files/a1b2c3d4e5.pdf",
+        "processed/a1b2c3d4e5-2510.54321.pdf"
+      ],
+      "locations": {
+        "papers/2510.54321-fixture.md": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1e702cf462\\test_explicit_reimport_changes_epoch_but_cannot_activate_another_paper-fake-system-bin\\4f78528eb9ce414d80f7b8d8a0e353e1-2510.54321-fixture.md",
+        "papers_pdf/2510.54321.pdf": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1e702cf462\\test_explicit_reimport_changes_epoch_but_cannot_activate_another_paper-fake-system-bin\\389af31df151413a9a321ac07fda90ca-2510.54321.pdf",
+        "reader/2510.54321": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1e702cf462\\test_explicit_reimport_changes_epoch_but_cannot_activate_another_paper-fake-system-bin\\5ecc8d5f152b486b8e5ede679e548d82-2510.54321",
+        "html_reader/2510.54321": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1e702cf462\\test_explicit_reimport_changes_epoch_but_cannot_activate_another_paper-fake-system-bin\\a857521dcaa84677b0f74dfd97f03a00-2510.54321",
+        "highlights/2510.54321.json": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1e702cf462\\test_explicit_reimport_changes_epoch_but_cannot_activate_another_paper-fake-system-bin\\8e865aee97b74532ae4543a9bc62dbdb-2510.54321.json",
+        "fulltext/2510.54321-0123456789abcdef.json": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1e702cf462\\test_explicit_reimport_changes_epoch_but_cannot_activate_another_paper-fake-system-bin\\63dc8dcd93584b5593a6b54d2fa53048-2510.54321-0123456789abcdef.json",
+        "queue_files/a1b2c3d4e5.pdf": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1e702cf462\\test_explicit_reimport_changes_epoch_but_cannot_activate_another_paper-fake-system-bin\\98a0aabacbf547ce8992a6c88edb8da8-a1b2c3d4e5.pdf",
+        "processed/a1b2c3d4e5-2510.54321.pdf": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1e702cf462\\test_explicit_reimport_changes_epoch_but_cannot_activate_another_paper-fake-system-bin\\7292bf09da4f4931b5c6b73b33ab5c7e-a1b2c3d4e5-2510.54321.pdf"
+      },
+      "state": "active"
+    }
+  }
+}

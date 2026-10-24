@@ -1,0 +1,15 @@
+{
+  "llama_exe": "llama",
+  "model_path": "",
+  "port": 8080,
+  "ctx": 16384,
+  "schedule": "23:30",
+  "theme": "light",
+  "lang": "en",
+  "font_size": 18,
+  "html_proxy": "",
+  "serif": true,
+  "ball_size": 42,
+  "ball_y": null,
+  "panel_y": null
+}

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "papers": {
+    "2510.54321": {
+      "id": "07a02f004acf400ea3dcd60a34015586",
+      "paper_id": "2510.54321",
+      "title": "2510.54321",
+      "paths": [],
+      "fingerprints": {},
+      "queue": [],
+      "state": "active",
+      "epoch": "8b3c2f28ef464539b7a9c202281560cb"
+    }
+  }
+}

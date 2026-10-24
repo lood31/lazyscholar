@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "papers": {
+    "2510.54321": {
+      "paper_id": "2510.54321",
+      "title": "Fixture",
+      "paths": [
+        "papers/2510.54321-fixture.md",
+        "papers_pdf/2510.54321.pdf",
+        "reader/2510.54321",
+        "html_reader/2510.54321",
+        "highlights/2510.54321.json",
+        "fulltext/2510.54321-0123456789abcdef.json",
+        "queue_files/a1b2c3d4e5.pdf",
+        "processed/a1b2c3d4e5-2510.54321.pdf"
+      ],
+      "fingerprints": {
+        "papers/2510.54321-fixture.md": "7b84c47f3be5ddcc83d95eb4e41dfe7589a63ffe089c436247d70a267ada838b",
+        "papers_pdf/2510.54321.pdf": "fb37c060b06720c50f5607ab94c5327a7b5cf137bb010343b9c05b464d350297",
+        "reader/2510.54321": "70dc003ee390c32a5d17166a1dc44554864a1a37ddb1689d6a42249730cc03c5",
+        "html_reader/2510.54321": "ee81208a273062ec859523d2ca4890a9b7204ca647bda6a92fc130458712efd2",
+        "highlights/2510.54321.json": "b001eb3d7a120f6e88231118edb2f2771648c883070ba2cea90dae498c7f4e41",
+        "fulltext/2510.54321-0123456789abcdef.json": "9d7642fdfdfe382f277e2405b6699d4ca246ebf4be0e57f71cd2e48a0c82d28a",
+        "queue_files/a1b2c3d4e5.pdf": "fb46e2dae03951bf2d787d77953a468bd236bda8ae2bfe569c0953cd9e39e624",
+        "processed/a1b2c3d4e5-2510.54321.pdf": "9e29c80e9aaeff2d75efd92a5e694d36b344bf08727716abefb93e857bfd1325"
+      },
+      "queue": [
+        {
+          "id": "a1b2c3d4e5",
+          "kind": "pdf",
+          "label": "2510.54321.pdf",
+          "value": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1e702cf462\\external-original\\original.pdf",
+          "stored": "a1b2c3d4e5.pdf",
+          "status": "done",
+          "note": "2510.54321-fixture.md"
+        }
+      ],
+      "lifecycle": "",
+      "id": "7d1d789429c44e0f9f1d92ac5c163f88",
+      "epoch": "646afead83fe4dad8042d723e8a816c3",
+      "date": "2026-10-24T09:08:33+00:00",
+      "completed": [
+        "papers/2510.54321-fixture.md",
+        "papers_pdf/2510.54321.pdf",
+        "reader/2510.54321",
+        "html_reader/2510.54321",
+        "highlights/2510.54321.json",
+        "fulltext/2510.54321-0123456789abcdef.json",
+        "queue_files/a1b2c3d4e5.pdf",
+        "processed/a1b2c3d4e5-2510.54321.pdf"
+      ],
+      "locations": {
+        "papers/2510.54321-fixture.md": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1e702cf462\\test_native_provider_moves_whole_paper_but_no_private_payload_is_created-fake-system-bin\\dde4f0169b9945589b61a5e1dec0354c-2510.54321-fixture.md",
+        "papers_pdf/2510.54321.pdf": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1e702cf462\\test_native_provider_moves_whole_paper_but_no_private_payload_is_created-fake-system-bin\\d61f39fc344c48a2b23b2c0c9922beaa-2510.54321.pdf",
+        "reader/2510.54321": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1e702cf462\\test_native_provider_moves_whole_paper_but_no_private_payload_is_created-fake-system-bin\\12231116441f40589a18359ab52afe57-2510.54321",
+        "html_reader/2510.54321": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1e702cf462\\test_native_provider_moves_whole_paper_but_no_private_payload_is_created-fake-system-bin\\001aa5a7ead447aba97c4376c530d8f7-2510.54321",
+        "highlights/2510.54321.json": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1e702cf462\\test_native_provider_moves_whole_paper_but_no_private_payload_is_created-fake-system-bin\\fa5d4a9e528048a885b4f78f215197db-2510.54321.json",
+        "fulltext/2510.54321-0123456789abcdef.json": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1e702cf462\\test_native_provider_moves_whole_paper_but_no_private_payload_is_created-fake-system-bin\\4d7d81187ede4f8eb8a3e4b20d591460-2510.54321-0123456789abcdef.json",
+        "queue_files/a1b2c3d4e5.pdf": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1e702cf462\\test_native_provider_moves_whole_paper_but_no_private_payload_is_created-fake-system-bin\\5ccb44d482864a99ae33686d98d70977-a1b2c3d4e5.pdf",
+        "processed/a1b2c3d4e5-2510.54321.pdf": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1e702cf462\\test_native_provider_moves_whole_paper_but_no_private_payload_is_created-fake-system-bin\\808f7e2ae66945c7981a3ec9e1ee3460-a1b2c3d4e5-2510.54321.pdf"
+      },
+      "state": "active"
+    }
+  }
+}

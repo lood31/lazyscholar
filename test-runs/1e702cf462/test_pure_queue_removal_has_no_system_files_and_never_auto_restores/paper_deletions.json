@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "papers": {
+    "2510.54322": {
+      "paper_id": "2510.54322",
+      "title": "2510.54322",
+      "paths": [],
+      "fingerprints": {},
+      "queue": [
+        {
+          "id": "b1b2c3d4e5",
+          "kind": "link",
+          "label": "2510.54322",
+          "value": "2510.54322",
+          "status": "pending"
+        }
+      ],
+      "lifecycle": "",
+      "id": "91261cc1a0a44bfe94fe975419faadbc",
+      "epoch": "bd3be89284084fa380603a8828049cb0",
+      "date": "2026-10-24T09:08:33+00:00",
+      "completed": [],
+      "locations": {},
+      "state": "queue_removed"
+    }
+  }
+}
