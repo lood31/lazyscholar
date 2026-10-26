@@ -43,8 +43,10 @@ import html as _html
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -3326,7 +3328,52 @@ def _default_vault() -> str:
     return str(Path.home() / "LazyScholarVault")
 
 
+_BUNDLE_MARKER = "lazyscholar.ico"
+_BUNDLE_STALE_AFTER = 3600  # seconds
+
+
+def _sweep_stale_bundle_dirs() -> None:
+    """Delete PyInstaller onefile bundle dirs left behind by earlier runs.
+
+    A onefile build unpacks ~80 MB into %TEMP%\\_MEIxxxxxx on every launch, and
+    the bootloader only removes that directory when the process exits cleanly.
+    Killing the app (or exiting while a child process still holds a handle on
+    the bundle) leaves the directory behind for good. Sweep the stale ones at
+    startup, on a background thread so the window is never delayed.
+
+    Safety: only directories carrying our own bundle marker are touched, so
+    other PyInstaller apps are never affected, and the bundle this process is
+    running from is always skipped. Anything still locked by another instance
+    is left alone for a later launch.
+    """
+    temp_root = Path(tempfile.gettempdir())
+    current = os.path.normcase(getattr(sys, "_MEIPASS", "") or "")
+    cutoff = time.time() - _BUNDLE_STALE_AFTER
+
+    def worker() -> None:
+        try:
+            candidates = list(temp_root.glob("_MEI*"))
+        except OSError:
+            return
+        for path in candidates:
+            try:
+                if not path.is_dir():
+                    continue
+                if current and os.path.normcase(str(path)) == current:
+                    continue
+                if path.stat().st_mtime > cutoff:
+                    continue
+                if not (path / _BUNDLE_MARKER).exists():
+                    continue
+                shutil.rmtree(path, ignore_errors=True)
+            except OSError:
+                continue
+
+    threading.Thread(target=worker, name="bundle-sweep", daemon=True).start()
+
+
 def main() -> int:
+    _sweep_stale_bundle_dirs()
     ap = argparse.ArgumentParser(description="LazyScholar unattended knowledge butler")
     ap.add_argument("--vault", default=None,
                     help="Obsidian vault path (default: shared vault, else ~/LazyScholarVault)")

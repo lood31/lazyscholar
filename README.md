@@ -173,6 +173,8 @@ From the repository root, after installing the runtime dependencies:
 
 Output: `dist/LazyScholar.exe`. The bundled Python dependencies do not include the local GGUF model or the system WebView2 runtime. The older `build-app.cmd` / `deploy-v2.ps1` helpers contain maintainer-machine paths; use the commands above for a different checkout location.
 
+A onefile build unpacks its bundled dependencies into `%TEMP%\_MEIxxxxxx` (about 80 MB) on every launch, and PyInstaller only removes that directory when the process exits cleanly — a killed run leaves one behind forever. LazyScholar therefore sweeps stale bundle directories on startup, on a background thread that never delays the window. It only removes `_MEI*` directories that still contain this build's `lazyscholar.ico` marker, are older than one hour, and are not the bundle the current process is running from, so other PyInstaller applications and a concurrently starting instance are untouched. Anything still locked is retried on the next launch.
+
 ## Troubleshooting
 
 | Symptom | What to check |
@@ -183,6 +185,7 @@ Output: `dist/LazyScholar.exe`. The bundled Python dependencies do not include t
 | New storage folder is not active | Quit and restart; remove an unintended `--vault` / `LAZYSCHOLAR_VAULT` override. Old files are deliberately not moved. |
 | Text selection adds/removes marks | Exit Highlight/Eraser mode to return to normal copying. |
 | UI or mathematics does not display | Check that WebView2 is installed and up to date. |
+| `%TEMP%` keeps growing after each launch | Stale `_MEI*` bundle directories are swept at the next launch; only directories carrying this build's marker and older than an hour are removed, so a run killed within the first hour leaves one directory behind until then. |
 
 ## Development checks
 
