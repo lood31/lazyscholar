@@ -1,0 +1,23 @@
+[
+  {
+    "id": "4dada3d3e6",
+    "kind": "link",
+    "value": "2510.16720",
+    "label": "2510.16720",
+    "status": "done",
+    "added": "2026-10-26T11:52:22",
+    "note": "fixture.md",
+    "error": null,
+    "progress": null
+  },
+  {
+    "id": "936bc675e4",
+    "kind": "link",
+    "value": "2510.00003",
+    "label": "2510.00003",
+    "status": "pending",
+    "added": "2026-10-26T11:52:22",
+    "note": null,
+    "error": null
+  }
+]

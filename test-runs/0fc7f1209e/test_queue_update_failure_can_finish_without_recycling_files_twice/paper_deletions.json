@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "papers": {
+    "2510.54321": {
+      "paper_id": "2510.54321",
+      "title": "Fixture",
+      "paths": [
+        "papers/2510.54321-fixture.md",
+        "papers_pdf/2510.54321.pdf",
+        "reader/2510.54321",
+        "html_reader/2510.54321",
+        "highlights/2510.54321.json",
+        "fulltext/2510.54321-0123456789abcdef.json",
+        "queue_files/a1b2c3d4e5.pdf",
+        "processed/a1b2c3d4e5-2510.54321.pdf"
+      ],
+      "fingerprints": {
+        "papers/2510.54321-fixture.md": "7b84c47f3be5ddcc83d95eb4e41dfe7589a63ffe089c436247d70a267ada838b",
+        "papers_pdf/2510.54321.pdf": "fb37c060b06720c50f5607ab94c5327a7b5cf137bb010343b9c05b464d350297",
+        "reader/2510.54321": "70dc003ee390c32a5d17166a1dc44554864a1a37ddb1689d6a42249730cc03c5",
+        "html_reader/2510.54321": "ee81208a273062ec859523d2ca4890a9b7204ca647bda6a92fc130458712efd2",
+        "highlights/2510.54321.json": "b001eb3d7a120f6e88231118edb2f2771648c883070ba2cea90dae498c7f4e41",
+        "fulltext/2510.54321-0123456789abcdef.json": "9d7642fdfdfe382f277e2405b6699d4ca246ebf4be0e57f71cd2e48a0c82d28a",
+        "queue_files/a1b2c3d4e5.pdf": "fb46e2dae03951bf2d787d77953a468bd236bda8ae2bfe569c0953cd9e39e624",
+        "processed/a1b2c3d4e5-2510.54321.pdf": "9e29c80e9aaeff2d75efd92a5e694d36b344bf08727716abefb93e857bfd1325"
+      },
+      "queue": [
+        {
+          "id": "a1b2c3d4e5",
+          "kind": "pdf",
+          "label": "2510.54321.pdf",
+          "value": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\0fc7f1209e\\external-original\\original.pdf",
+          "stored": "a1b2c3d4e5.pdf",
+          "status": "done",
+          "note": "2510.54321-fixture.md"
+        }
+      ],
+      "lifecycle": "",
+      "id": "0a576a7a670342af818ac542ee0d242d",
+      "epoch": "94b1ee7bba3d4822916c4fc6a6fa250d",
+      "date": "2026-10-26T11:52:31+00:00",
+      "completed": [
+        "papers/2510.54321-fixture.md",
+        "papers_pdf/2510.54321.pdf",
+        "reader/2510.54321",
+        "html_reader/2510.54321",
+        "highlights/2510.54321.json",
+        "fulltext/2510.54321-0123456789abcdef.json",
+        "queue_files/a1b2c3d4e5.pdf",
+        "processed/a1b2c3d4e5-2510.54321.pdf"
+      ],
+      "locations": {
+        "papers/2510.54321-fixture.md": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\0fc7f1209e\\test_queue_update_failure_can_finish_without_recycling_files_twice-fake-system-bin\\74b73804672344e4af10bfe6c97c1eee-2510.54321-fixture.md",
+        "papers_pdf/2510.54321.pdf": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\0fc7f1209e\\test_queue_update_failure_can_finish_without_recycling_files_twice-fake-system-bin\\8f9fffeef1cc415d9993687104a57a67-2510.54321.pdf",
+        "reader/2510.54321": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\0fc7f1209e\\test_queue_update_failure_can_finish_without_recycling_files_twice-fake-system-bin\\7bbd4dc75a0e4e59b79d64cfcd875033-2510.54321",
+        "html_reader/2510.54321": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\0fc7f1209e\\test_queue_update_failure_can_finish_without_recycling_files_twice-fake-system-bin\\9274d7740f8c408c8676ce9ebd79ceed-2510.54321",
+        "highlights/2510.54321.json": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\0fc7f1209e\\test_queue_update_failure_can_finish_without_recycling_files_twice-fake-system-bin\\772c30fdb25f41808aa672c1db2aba64-2510.54321.json",
+        "fulltext/2510.54321-0123456789abcdef.json": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\0fc7f1209e\\test_queue_update_failure_can_finish_without_recycling_files_twice-fake-system-bin\\01cc27d373e24217844c8c6f82f4999f-2510.54321-0123456789abcdef.json",
+        "queue_files/a1b2c3d4e5.pdf": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\0fc7f1209e\\test_queue_update_failure_can_finish_without_recycling_files_twice-fake-system-bin\\8fb40e290dcd4301970b7dc823935c27-a1b2c3d4e5.pdf",
+        "processed/a1b2c3d4e5-2510.54321.pdf": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\0fc7f1209e\\test_queue_update_failure_can_finish_without_recycling_files_twice-fake-system-bin\\c438206049f1455dab2ff808f63369d1-a1b2c3d4e5-2510.54321.pdf"
+      },
+      "state": "active"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "id": "53b6ab99d4",
+    "kind": "html",
+    "value": "D:\\a\\lazyscholar\\lazyscholar\\qa\\test-runs\\1cfd97d35b\\test_failed_fulltext_generation_preserves_old_note_and_reading\\paper.html",
+    "label": "Saved paper fixture",
+    "paper_id": "local-d9ba0bb2c3034e039c29c8f6",
+    "status": "failed",
+    "added": "2026-10-26T11:52:28",
+    "note": null,
+    "error": "片段 [C0001] 的原文依据未通过校验；未保存半成品",
+    "progress": null
+  }
+]

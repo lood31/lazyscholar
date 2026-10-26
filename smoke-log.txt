@@ -1,0 +1,7 @@
+ball render ok: 42px at this runner's scaling
+exe launched pid=6008
+/app -> 200
+api state ok=True
+screenshot -> shot-ball.png exists=True
+wake signal sent
+screenshot -> shot-panel.png exists=True
